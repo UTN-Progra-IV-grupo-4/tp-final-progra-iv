@@ -1,0 +1,101 @@
+# Seat Reservation System
+
+Group final project — Programming IV
+
+## Overview
+
+A distributed seat reservation system for events (concerts, conferences, shows). The domain is abstract: any event with a limited number of seats where multiple users can attempt to book the same seat simultaneously.
+
+## Reservation States
+
+| State     | Description                                                                 |
+|-----------|-----------------------------------------------------------------------------|
+| Retained  | Seat is held while payment is processed. Has an expiration timeout.         |
+| Confirmed | Payment succeeded. Seat is permanently reserved.                            |
+| Rejected  | Reservation failed. Reason recorded: seat taken, payment failed, or payment unavailable. |
+| Expired   | Retention time elapsed with no payment result.                              |
+
+A seat is **occupied** while it has a retained or confirmed reservation. Any other state releases the seat.
+
+## Architecture
+
+Microservices style. Three independently deployable services communicate via REST, gRPC, and an async message broker.
+
+```
+Client
+  │
+  ▼
+Availability (REST — Clean Architecture)
+  │  PUBLISH        SUBSCRIBE
+  ▼                     │
+Message Broker ──────── │
+                         ▼
+                   Booking (REST — N-Layer)
+                         │  gRPC
+                         ▼
+                   Payment (gRPC — N-Layer)
+                         │
+                         ▼
+                   Authorization Server
+```
+
+## Services
+
+### Availability
+- Exposes seat availability queries (public, no auth required)
+- Accepts reservation requests and publishes them to the broker
+- Delegates reservation status queries to Booking
+- **Architecture:** Clean Architecture, anemic domain
+
+### Booking
+- Consumes reservation requests from the broker
+- Creates retained reservations or rejects them (seat conflict)
+- Calls Payment via gRPC to process the charge
+- Confirms or rejects based on payment result
+- Handles expiration of retained reservations
+- **Architecture:** N-Layer, anemic domain
+
+### Payment
+- Processes charges for retained reservations via gRPC
+- **Architecture:** N-Layer, anemic domain
+
+### Notification Service
+- Notifies users when a reservation is created and confirmed after successful payment
+
+### Authorization Server
+- Issues tokens for authenticated users
+- All inter-service communication is authenticated
+
+## Reservation Flow
+
+1. **Query** — Any visitor queries available seats. No login required.
+2. **Auth** — User obtains a token from the Authorization Server.
+3. **Request** — User sends a reservation request to Availability. Availability validates the seat, registers the request with a unique ID, and publishes it to the broker. Responds immediately (async).
+4. **Processing** — A Booking replica picks up the message. Creates a retained reservation if the seat is free, rejects otherwise.
+5. **Payment** — Booking calls Payment via gRPC to charge the retained reservation.
+6. **Result** — Booking confirms or rejects based on Payment's response.
+7. **Status check** — User polls Availability → Availability queries Booking.
+8. **Expiration** — If a retained reservation reaches its timeout with no result, it expires and the seat is released.
+
+## Branch Strategy
+
+Branches follow ticket-based naming (e.g., Jira/Linear):
+
+```
+main        → stable, production-ready
+develop     → integration branch
+<TICKET-ID> → one branch per task/ticket
+```
+
+Pull requests go from `<TICKET-ID>` → `develop`. Releases merge `develop` → `main`.
+
+## Glossary
+
+| Term    | Definition                              |
+|---------|-----------------------------------------|
+| Event   | The occasion with seats to reserve      |
+| Message | What travels through the broker         |
+| Suceso  | Actions within system components        |
+| Seat    | Physical place to sit                   |
+| Booking | The rental of a physical seat           |
+| Payment | Finalization of a physical seat rental  |
