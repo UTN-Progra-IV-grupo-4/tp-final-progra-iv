@@ -61,6 +61,7 @@ Message Broker ──────── │
 
 ### Notification Service
 - Notifies users when a reservation is created and confirmed after successful payment
+- **Out of implementation scope** (confirmed by the professor): it is only drawn in the architecture diagrams, so it needs no subscription on the broker
 
 ### Authorization Server
 - Issues tokens for authenticated users
@@ -75,7 +76,7 @@ Agreed by the team and validated by the professor. Each decision has its own iss
 | Platform | .NET 10, single solution (`TpFinal.sln`) | Services never reference each other; only `Contracts` is shared |
 | Database | PostgreSQL with Entity Framework Core (Npgsql) | One container, one database per service, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
 | Authorization server | Keycloak, running as a container | OIDC for users and client credentials between services ([#5](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)) |
-| Message broker | Azure Service Bus (one topic, one subscription per consumer), behind an interface | Availability publishes, Booking consumes ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
+| Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
 | Running everything | Docker Compose, one command | Planned in [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3) |
 
 Secrets, such as the Service Bus connection string, live in a local `.env` file or in `dotnet user-secrets` and are **never committed**: the repository is public. Only `.env.example` with empty values is versioned.
