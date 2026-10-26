@@ -30,16 +30,6 @@
       "cwd": "${workspaceFolder}/src/Payment/Payment.Grpc",
       "env": { "ASPNETCORE_ENVIRONMENT": "Development" },
       "stopAtEntry": false
-    },
-    {
-      "name": "Notifications.Worker",
-      "type": "coreclr",
-      "request": "launch",
-      "preLaunchTask": "build",
-      "program": "${workspaceFolder}/src/Notifications/Notifications.Worker/bin/Debug/net10.0/Notifications.Worker.dll",
-      "cwd": "${workspaceFolder}/src/Notifications/Notifications.Worker",
-      "env": { "DOTNET_ENVIRONMENT": "Development" },
-      "stopAtEntry": false
     }
   ],
   "compounds": [
@@ -48,8 +38,7 @@
       "configurations": [
         "Availability.Web",
         "Booking.Api",
-        "Payment.Grpc",
-        "Notifications.Worker"
+        "Payment.Grpc"
       ],
       "stopAll": true
     }

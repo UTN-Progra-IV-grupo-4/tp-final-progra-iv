@@ -87,7 +87,6 @@ src/
   Availability/Availability.Web        ASP.NET Core MVC site
   Booking/Booking.Api                  REST API
   Payment/Payment.Grpc                 gRPC API
-  Notifications/Notifications.Worker   worker service
   Contracts/                           .proto files and messages, the only shared project
 ```
 
