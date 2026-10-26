@@ -66,6 +66,20 @@ Message Broker ──────── │
 - Issues tokens for authenticated users
 - All inter-service communication is authenticated
 
+## Technical Decisions
+
+Agreed by the team and validated by the professor. Each decision has its own issue with the reasoning and the alternatives.
+
+| Area | Decision | Notes |
+|------|----------|-------|
+| Platform | .NET 10, single solution (`TpFinal.sln`) | Services never reference each other; only `Contracts` is shared |
+| Database | PostgreSQL with Entity Framework Core (Npgsql) | One container, one database per service, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
+| Authorization server | Keycloak, running as a container | OIDC for users and client credentials between services ([#5](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)) |
+| Message broker | Azure Service Bus (one topic, one subscription per consumer), behind an interface | Availability publishes, Booking consumes ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
+| Running everything | Docker Compose, one command | Planned in [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3) |
+
+Secrets, such as the Service Bus connection string, live in a local `.env` file or in `dotnet user-secrets` and are **never committed**: the repository is public. Only `.env.example` with empty values is versioned.
+
 ## Reservation Flow
 
 1. **Query** — Any visitor queries available seats. No login required.
