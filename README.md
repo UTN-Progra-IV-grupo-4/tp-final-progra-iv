@@ -77,17 +77,33 @@ Message Broker ──────── │
 7. **Status check** — User polls Availability → Availability queries Booking.
 8. **Expiration** — If a retained reservation reaches its timeout with no result, it expires and the seat is released.
 
-## Branch Strategy
+## Workflow
 
-Branches follow ticket-based naming (e.g., Jira/Linear):
+Tasks are tracked as GitHub Issues on the [project board](https://github.com/orgs/UTN-Progra-IV-grupo-4/projects/1) (Backlog → Todo → In Progress → Blocked → Review → Develop → Prod).
+
+### Branches
+
+Branches are named after the issue number:
 
 ```
-main        → stable, production-ready
-develop     → integration branch
-<TICKET-ID> → one branch per task/ticket
+main                        → stable, production-ready
+develop                     → integration branch
+<issue-number>-short-name   → one branch per issue, created from develop (e.g. 12-availability-base)
 ```
 
-Pull requests go from `<TICKET-ID>` → `develop`. Releases merge `develop` → `main`.
+Nobody pushes directly to `main` or `develop`: both are protected by a ruleset.
+
+### Pull requests
+
+- Open the PR from `<issue-number>-short-name` into `develop`.
+- The description must include `Closes #<issue-number>` (the PR template already has it).
+- At least **1 approval** from another team member is required, so nobody merges their own PR.
+- Releases merge `develop` → `main`, and the cards are moved to **Prod** by hand.
+
+### Commits
+
+[Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`, for example `feat(booking): consume reservation requests`.
+Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`.
 
 ## Glossary
 
