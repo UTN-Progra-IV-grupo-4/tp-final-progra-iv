@@ -1,0 +1,84 @@
+services:
+  availability-db:
+    image: postgres:16
+    container_name: availability-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${AVAILABILITY_DB_NAME}
+      POSTGRES_USER: ${AVAILABILITY_DB_USER}
+      POSTGRES_PASSWORD: ${AVAILABILITY_DB_PASSWORD}
+    ports:
+      - "${AVAILABILITY_DB_PORT}:5432"
+    volumes:
+      - availability-db-data:/var/lib/postgresql/data
+    networks:
+      - seat-reservation-net
+
+  booking-db:
+    image: postgres:16
+    container_name: booking-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${BOOKING_DB_NAME}
+      POSTGRES_USER: ${BOOKING_DB_USER}
+      POSTGRES_PASSWORD: ${BOOKING_DB_PASSWORD}
+    ports:
+      - "${BOOKING_DB_PORT}:5432"
+    volumes:
+      - booking-db-data:/var/lib/postgresql/data
+    networks:
+      - seat-reservation-net
+
+  payment-db:
+    image: postgres:16
+    container_name: payment-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PAYMENT_DB_NAME}
+      POSTGRES_USER: ${PAYMENT_DB_USER}
+      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD}
+    ports:
+      - "${PAYMENT_DB_PORT}:5432"
+    volumes:
+      - payment-db-data:/var/lib/postgresql/data
+    networks:
+      - seat-reservation-net
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+    ports:
+      - "${RABBITMQ_AMQP_PORT}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    networks:
+      - seat-reservation-net
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    restart: unless-stopped
+    command: ["start-dev"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    ports:
+      - "${KEYCLOAK_PORT}:8080"
+    networks:
+      - seat-reservation-net
+
+networks:
+  seat-reservation-net:
+    name: seat-reservation-net
+    driver: bridge
+
+volumes:
+  availability-db-data:
+  booking-db-data:
+  payment-db-data:
+  rabbitmq-data:
