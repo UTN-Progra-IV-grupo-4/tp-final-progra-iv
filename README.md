@@ -92,6 +92,30 @@ Secrets, such as the Service Bus connection string, live in a local `.env` file 
 7. **Status check** — User polls Availability → Availability queries Booking.
 8. **Expiration** — If a retained reservation reaches its timeout with no result, it expires and the seat is released.
 
+## Getting started
+
+Requires the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
+
+```
+TpFinal.sln
+src/
+  Availability/Availability.Web        ASP.NET Core MVC site
+  Booking/Booking.Api                  REST API
+  Payment/Payment.Grpc                 gRPC API
+  Contracts/                           .proto files and messages, the only shared project
+```
+
+Services never reference each other: they only talk over HTTP, gRPC or the broker, and the only project they may share is `Contracts`.
+
+```bash
+dotnet build TpFinal.sln
+dotnet run --project src/Booking/Booking.Api
+```
+
+- **Visual Studio**: open `TpFinal.sln`. To run several services at once use *Solution → Configure Startup Projects → Multiple startup projects*.
+- **VS Code**: open the repository folder, install the recommended extensions (C# Dev Kit) and press F5 with the **All services** launch configuration.
+- **Any editor**: the `dotnet` CLI is enough. Code style is shared through `.editorconfig`.
+
 ## Workflow
 
 Tasks are tracked as GitHub Issues on the [project board](https://github.com/orgs/UTN-Progra-IV-grupo-4/projects/1) (Backlog → Todo → In Progress → Blocked → Review → Develop → Prod).
