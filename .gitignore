@@ -13,9 +13,12 @@
 TestResults/
 *.log
 
-# Other IDEs
+# Other IDEs (VS Code: only the shared configuration is versioned)
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
 *.swp
 
 # Secrets and local configuration
