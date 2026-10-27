@@ -74,12 +74,46 @@ Agreed by the team and validated by the professor. Each decision has its own iss
 | Area | Decision | Notes |
 |------|----------|-------|
 | Platform | .NET 10, single solution (`TpFinal.sln`) | Services never reference each other; only `Contracts` is shared |
-| Database | PostgreSQL with Entity Framework Core (Npgsql) | One container, one database per service, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
+| Database | PostgreSQL with Entity Framework Core (Npgsql) | One PostgreSQL container with three logical databases, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
 | Authorization server | Keycloak, running as a container | OIDC for users and client credentials between services ([#5](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)) |
-| Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
+| Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes; RabbitMQ exists as local fallback profile ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
 | Running everything | Docker Compose, one command | Planned in [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3) |
 
 Secrets, such as the Service Bus connection string, live in a local `.env` file or in `dotnet user-secrets` and are **never committed**: the repository is public. Only `.env.example` with empty values is versioned.
+
+## Local Infrastructure (Docker Compose)
+
+1. Create your local env file from the template:
+
+```bash
+cp .env.example .env
+```
+
+On PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+2. Fill required variables in `.env`.
+
+3. Start core infrastructure (PostgreSQL + Keycloak):
+
+```bash
+docker compose up -d
+```
+
+4. Start infrastructure including RabbitMQ fallback:
+
+```bash
+docker compose --profile rabbitmq up -d
+```
+
+5. Stop and remove containers:
+
+```bash
+docker compose down
+```
 
 ## Reservation Flow
 

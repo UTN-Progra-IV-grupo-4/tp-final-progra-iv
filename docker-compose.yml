@@ -1,46 +1,26 @@
 services:
-  availability-db:
+  postgres-db:
     image: postgres:16
-    container_name: availability-db
+    container_name: postgres-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${AVAILABILITY_DB_NAME}
-      POSTGRES_USER: ${AVAILABILITY_DB_USER}
-      POSTGRES_PASSWORD: ${AVAILABILITY_DB_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_ADMIN_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres}
+      AVAILABILITY_DB_NAME: ${AVAILABILITY_DB_NAME}
+      AVAILABILITY_DB_USER: ${AVAILABILITY_DB_USER}
+      AVAILABILITY_DB_PASSWORD: ${AVAILABILITY_DB_PASSWORD}
+      BOOKING_DB_NAME: ${BOOKING_DB_NAME}
+      BOOKING_DB_USER: ${BOOKING_DB_USER}
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD}
+      PAYMENT_DB_NAME: ${PAYMENT_DB_NAME}
+      PAYMENT_DB_USER: ${PAYMENT_DB_USER}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
     ports:
-      - "${AVAILABILITY_DB_PORT}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - availability-db-data:/var/lib/postgresql/data
-    networks:
-      - seat-reservation-net
-
-  booking-db:
-    image: postgres:16
-    container_name: booking-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${BOOKING_DB_NAME}
-      POSTGRES_USER: ${BOOKING_DB_USER}
-      POSTGRES_PASSWORD: ${BOOKING_DB_PASSWORD}
-    ports:
-      - "${BOOKING_DB_PORT}:5432"
-    volumes:
-      - booking-db-data:/var/lib/postgresql/data
-    networks:
-      - seat-reservation-net
-
-  payment-db:
-    image: postgres:16
-    container_name: payment-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${PAYMENT_DB_NAME}
-      POSTGRES_USER: ${PAYMENT_DB_USER}
-      POSTGRES_PASSWORD: ${PAYMENT_DB_PASSWORD}
-    ports:
-      - "${PAYMENT_DB_PORT}:5432"
-    volumes:
-      - payment-db-data:/var/lib/postgresql/data
+      - postgres-db-data:/var/lib/postgresql/data
+      - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
     networks:
       - seat-reservation-net
 
@@ -48,19 +28,20 @@ services:
     image: rabbitmq:3-management
     container_name: rabbitmq
     restart: unless-stopped
+    profiles: ["rabbitmq"]
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-guest}
     ports:
-      - "${RABBITMQ_AMQP_PORT}:5672"
-      - "${RABBITMQ_MANAGEMENT_PORT}:15672"
+      - "${RABBITMQ_AMQP_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - seat-reservation-net
 
   keycloak:
-    image: quay.io/keycloak/keycloak:latest
+    image: quay.io/keycloak/keycloak:26.0.7
     container_name: keycloak
     restart: unless-stopped
     command: ["start-dev"]
@@ -68,7 +49,7 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     ports:
-      - "${KEYCLOAK_PORT}:8080"
+      - "${KEYCLOAK_PORT:-8080}:8080"
     networks:
       - seat-reservation-net
 
@@ -78,7 +59,5 @@ networks:
     driver: bridge
 
 volumes:
-  availability-db-data:
-  booking-db-data:
-  payment-db-data:
+  postgres-db-data:
   rabbitmq-data:
