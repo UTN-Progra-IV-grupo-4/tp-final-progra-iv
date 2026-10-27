@@ -1,7 +1,11 @@
+using Availability.Infrastructure;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+// Web conecta las capas al iniciar; los futuros controladores utilizarán Application.
+builder.Services.AddInfrastructure(builder.Configuration.GetConnectionString("Availability"));
 
 var app = builder.Build();
 
