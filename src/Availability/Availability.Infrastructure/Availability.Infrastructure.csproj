@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <!-- La infraestructura implementa los contratos de Application y persiste las entidades de Domain. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Availability.Application\Availability.Application.csproj" />
+    <ProjectReference Include="..\Availability.Domain\Availability.Domain.csproj" />
+  </ItemGroup>
+</Project>

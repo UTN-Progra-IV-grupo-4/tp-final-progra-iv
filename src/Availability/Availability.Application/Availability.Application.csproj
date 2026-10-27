@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <!-- Los casos de uso dependen del dominio; los detalles de infraestructura quedan fuera. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Availability.Domain\Availability.Domain.csproj" />
+  </ItemGroup>
+</Project>
