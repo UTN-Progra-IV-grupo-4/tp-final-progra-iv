@@ -107,6 +107,14 @@ src/
 
 Services never reference each other: they only talk over HTTP, gRPC or the broker, and the only project they may share is `Contracts`.
 
+The Booking API requires a PostgreSQL connection string named `Booking`. In development, set it with User Secrets:
+
+```bash
+dotnet user-secrets set "ConnectionStrings:Booking" "Host=localhost;Database=booking;Username=booking;Password=your-local-password" --project src/Booking/Booking.Api
+```
+
+In other environments, supply it through the `ConnectionStrings__Booking` environment variable. Never commit credentials or place them in `appsettings.json`.
+
 ```bash
 dotnet build TpFinal.sln
 dotnet run --project src/Booking/Booking.Api

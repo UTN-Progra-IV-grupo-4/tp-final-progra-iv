@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>TpFinal.Booking.Api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Booking.Business\Booking.Business.csproj" />
+    <ProjectReference Include="..\Booking.Data\Booking.Data.csproj" />
   </ItemGroup>
 
 </Project>
