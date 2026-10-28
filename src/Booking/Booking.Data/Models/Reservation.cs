@@ -6,7 +6,7 @@ public class Reservation
 
     public Guid SeatId { get; set; }
 
-    public ReservationStatus Status { get; set; } = ReservationStatus.Retenida;
+    public ReservationStatus Status { get; set; } = ReservationStatus.Retained;
 
     public ReservationRejectionReason? RejectionReason { get; set; }
 

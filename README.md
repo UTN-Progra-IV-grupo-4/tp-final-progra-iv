@@ -10,12 +10,12 @@ A distributed seat reservation system for events (concerts, conferences, shows).
 
 | State      | Description                                                                 |
 |------------|-----------------------------------------------------------------------------|
-| Retenida   | Seat is held while payment is processed. Has an expiration timeout.         |
-| Confirmada | Payment succeeded. Seat is permanently reserved.                            |
-| Rechazada  | Reservation failed. Reason: AsientoOcupado, PagoFallido, or PagoNoDisponible. |
-| Vencida    | Retention time elapsed with no payment result.                              |
+| Retained  | Seat is held while payment is processed. Has an expiration timeout.          |
+| Confirmed | Payment succeeded. Seat is permanently reserved.                            |
+| Rejected  | Reservation failed because the seat is occupied, payment failed, or payment is unavailable. |
+| Expired   | Retention time elapsed with no payment result.                              |
 
-A seat is **occupied** while it has a Retenida or Confirmada reservation. Any other state releases the seat.
+A seat is **occupied** while it has a Retained or Confirmed reservation. Any other state releases the seat.
 
 ## Architecture
 
