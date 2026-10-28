@@ -55,6 +55,8 @@ Message Broker ──────── │
 - Handles expiration of retained reservations
 - **Architecture:** N-Layer, anemic domain
 
+Booking separates its REST entry point (`Booking.Api`), business layer (`Booking.Business`), and persistence (`Booking.Data`). The API is the composition root and registers the data layer through dependency injection. Reservation is a data-only model; its EF Core mapping lives in a separate Fluent API configuration so database details stay out of the model. Reservation status and rejection reason enums are stored as text for readable database values.
+
 ### Payment
 - Processes charges for retained reservations via gRPC
 - **Architecture:** N-Layer, anemic domain
