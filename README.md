@@ -115,6 +115,18 @@ dotnet user-secrets set "ConnectionStrings:Booking" "Host=localhost;Database=boo
 
 In other environments, supply it through the `ConnectionStrings__Booking` environment variable. Never commit credentials or place them in `appsettings.json`.
 
+Create a migration without PostgreSQL running:
+
+```bash
+dotnet ef migrations add InitialCreate --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api --output-dir Migrations
+```
+
+Apply migrations when the PostgreSQL database is accessible:
+
+```bash
+dotnet ef database update --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
+```
+
 ```bash
 dotnet build TpFinal.sln
 dotnet run --project src/Booking/Booking.Api
