@@ -12,10 +12,10 @@ A distributed seat reservation system for events (concerts, conferences, shows).
 |-----------|-----------------------------------------------------------------------------|
 | Retained  | Seat is held while payment is processed. Has an expiration timeout.         |
 | Confirmed | Payment succeeded. Seat is permanently reserved.                            |
-| Rejected  | Reservation failed. Reason recorded: seat taken, payment failed, or payment unavailable. |
+| Rejected  | Reservation failed. Reason: SeatTaken, PaymentFailed, or PaymentUnavailable. |
 | Expired   | Retention time elapsed with no payment result.                              |
 
-A seat is **occupied** while it has a retained or confirmed reservation. Any other state releases the seat.
+A seat is **occupied** while it has a Retained or Confirmed reservation. Any other state releases the seat.
 
 ## Architecture
 
@@ -54,6 +54,8 @@ Message Broker ──────── │
 - Confirms or rejects based on payment result
 - Handles expiration of retained reservations
 - **Architecture:** N-Layer, anemic domain
+
+Booking separates its REST entry point (`Booking.Api`), business layer (`Booking.Business`), and persistence (`Booking.Data`). The API is the composition root and registers the business layer, which delegates persistence setup to Data. `Reservation.Id` is the request ID supplied by Availability; `EventId` and `SeatId` have a partial unique index for Retained and Confirmed reservations. Reservation is a data-only model; its EF Core mapping lives in a separate Fluent API configuration, and status and rejection reason enums are stored as text for readable database values.
 
 ### Payment
 - Processes charges for retained reservations via gRPC
@@ -106,6 +108,26 @@ src/
 ```
 
 Services never reference each other: they only talk over HTTP, gRPC or the broker, and the only project they may share is `Contracts`.
+
+The Booking API requires a PostgreSQL connection string named `Booking`. In development, set it with User Secrets:
+
+```bash
+dotnet user-secrets set "ConnectionStrings:Booking" "Host=localhost;Database=<BOOKING_DB_NAME>;Username=<BOOKING_DB_USER>;Password=<BOOKING_DB_PASSWORD>" --project src/Booking/Booking.Api
+```
+
+Use the database name, user and password you set in your local `.env` for the Docker Compose PostgreSQL container. In other environments, supply it through the `ConnectionStrings__Booking` environment variable. Never commit credentials or place them in `appsettings.json`.
+
+Create a migration without PostgreSQL running:
+
+```bash
+dotnet ef migrations add InitialCreate --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api --output-dir Migrations
+```
+
+Apply migrations when the PostgreSQL database is accessible. The EF Core tools read the same User Secrets and `ConnectionStrings__Booking` variable as the API:
+
+```bash
+dotnet ef database update --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
+```
 
 ```bash
 dotnet build TpFinal.sln

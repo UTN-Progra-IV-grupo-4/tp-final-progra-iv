@@ -1,6 +1,17 @@
+using Booking.Business;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+var bookingConnectionString = builder.Configuration.GetConnectionString("Booking");
+if (string.IsNullOrWhiteSpace(bookingConnectionString))
+{
+    throw new InvalidOperationException(
+        "Connection string 'Booking' is not configured. Set it with dotnet user-secrets or the ConnectionStrings__Booking environment variable.");
+}
+
+builder.Services.AddBookingBusiness(bookingConnectionString);
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
