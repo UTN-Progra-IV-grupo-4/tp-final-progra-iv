@@ -14,11 +14,19 @@ public class ReservationConfiguration : IEntityTypeConfiguration<Reservation>
 
         builder.Property(reservation => reservation.Id)
             .HasColumnName("id")
-            .ValueGeneratedOnAdd();
+            .ValueGeneratedNever();
+
+        builder.Property(reservation => reservation.EventId)
+            .HasColumnName("event_id")
+            .IsRequired();
 
         builder.Property(reservation => reservation.SeatId)
             .HasColumnName("seat_id")
             .IsRequired();
+
+        builder.HasIndex(reservation => new { reservation.EventId, reservation.SeatId })
+            .IsUnique()
+            .HasFilter("\"status\" IN ('Retained', 'Confirmed')");
 
         builder.Property(reservation => reservation.Status)
             .HasColumnName("status")

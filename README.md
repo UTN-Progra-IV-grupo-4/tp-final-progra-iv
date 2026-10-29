@@ -8,11 +8,11 @@ A distributed seat reservation system for events (concerts, conferences, shows).
 
 ## Reservation States
 
-| State      | Description                                                                 |
-|------------|-----------------------------------------------------------------------------|
-| Retained  | Seat is held while payment is processed. Has an expiration timeout.          |
+| State     | Description                                                                 |
+|-----------|-----------------------------------------------------------------------------|
+| Retained  | Seat is held while payment is processed. Has an expiration timeout.         |
 | Confirmed | Payment succeeded. Seat is permanently reserved.                            |
-| Rejected  | Reservation failed because the seat is occupied, payment failed, or payment is unavailable. |
+| Rejected  | Reservation failed. Reason: SeatTaken, PaymentFailed, or PaymentUnavailable. |
 | Expired   | Retention time elapsed with no payment result.                              |
 
 A seat is **occupied** while it has a Retained or Confirmed reservation. Any other state releases the seat.
@@ -55,7 +55,7 @@ Message Broker ──────── │
 - Handles expiration of retained reservations
 - **Architecture:** N-Layer, anemic domain
 
-Booking separates its REST entry point (`Booking.Api`), business layer (`Booking.Business`), and persistence (`Booking.Data`). The API is the composition root and registers the data layer through dependency injection. Reservation is a data-only model; its EF Core mapping lives in a separate Fluent API configuration so database details stay out of the model. Reservation status and rejection reason enums are stored as text for readable database values.
+Booking separates its REST entry point (`Booking.Api`), business layer (`Booking.Business`), and persistence (`Booking.Data`). The API is the composition root and registers the business layer, which delegates persistence setup to Data. `Reservation.Id` is the request ID supplied by Availability; `EventId` and `SeatId` have a partial unique index for Retained and Confirmed reservations. Reservation is a data-only model; its EF Core mapping lives in a separate Fluent API configuration, and status and rejection reason enums are stored as text for readable database values.
 
 ### Payment
 - Processes charges for retained reservations via gRPC

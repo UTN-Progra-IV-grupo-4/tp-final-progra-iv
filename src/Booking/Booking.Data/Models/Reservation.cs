@@ -4,6 +4,8 @@ public class Reservation
 {
     public Guid Id { get; set; }
 
+    public Guid EventId { get; set; }
+
     public Guid SeatId { get; set; }
 
     public ReservationStatus Status { get; set; } = ReservationStatus.Retained;

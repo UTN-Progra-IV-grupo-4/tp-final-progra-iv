@@ -17,7 +17,7 @@ namespace Booking.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.0")
+                .HasAnnotation("ProductVersion", "10.0.14")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -25,9 +25,12 @@ namespace Booking.Data.Migrations
             modelBuilder.Entity("Booking.Data.Models.Reservation", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
 
                     b.Property<DateTimeOffset?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone")
@@ -49,6 +52,10 @@ namespace Booking.Data.Migrations
                         .HasColumnName("status");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EventId", "SeatId")
+                        .IsUnique()
+                        .HasFilter("\"status\" IN ('Retained', 'Confirmed')");
 
                     b.ToTable("reservations", (string)null);
                 });

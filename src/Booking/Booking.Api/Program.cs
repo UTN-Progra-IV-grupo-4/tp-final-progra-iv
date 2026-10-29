@@ -1,4 +1,4 @@
-using Booking.Data;
+using Booking.Business;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,7 +11,7 @@ if (string.IsNullOrWhiteSpace(bookingConnectionString))
         "Connection string 'Booking' is not configured. Set it with dotnet user-secrets or the ConnectionStrings__Booking environment variable.");
 }
 
-builder.Services.AddBookingData(bookingConnectionString);
+builder.Services.AddBookingBusiness(bookingConnectionString);
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
