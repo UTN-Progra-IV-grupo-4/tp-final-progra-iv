@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Capa de acceso a datos (N-Layer): entidades, DbContext y repositorios. Solo la usa Payment.Business. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Fijada a mano: el proveedor pide >= 10.0.4 y NuGet instalaría esa, la mínima, con parches de atraso.
+         EF Design en Payment.Grpc tiene que usar esta misma versión. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.14" />
+    <!-- El proveedor es lo único atado a PostgreSQL: cambiar de motor no toca Business ni Grpc. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+  </ItemGroup>
+
+</Project>
