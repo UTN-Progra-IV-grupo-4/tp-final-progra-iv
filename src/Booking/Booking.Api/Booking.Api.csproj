@@ -17,7 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Booking.Business\Booking.Business.csproj" />
-    <ProjectReference Include="..\Booking.Data\Booking.Data.csproj" />
   </ItemGroup>
 
 </Project>
