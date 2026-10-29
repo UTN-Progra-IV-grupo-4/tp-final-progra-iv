@@ -123,10 +123,10 @@ Create a migration without PostgreSQL running:
 dotnet ef migrations add InitialCreate --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api --output-dir Migrations
 ```
 
-Apply migrations when the PostgreSQL database is accessible. The EF Core tools do not read User Secrets, so set the `ConnectionStrings__Booking` environment variable first, or pass `--connection`:
+Apply migrations when the PostgreSQL database is accessible. The EF Core tools read the same User Secrets and `ConnectionStrings__Booking` variable as the API:
 
 ```bash
-dotnet ef database update --connection "<connection string>" --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
+dotnet ef database update --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
 ```
 
 ```bash

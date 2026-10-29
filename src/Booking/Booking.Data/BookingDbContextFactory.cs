@@ -1,16 +1,21 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Microsoft.Extensions.Configuration;
 
 namespace Booking.Data;
 
+// Used only by the EF Core tools, so migrations can be created without a configured connection string.
 public class BookingDbContextFactory : IDesignTimeDbContextFactory<BookingDbContext>
 {
-    private const string ConnectionStringVariable = "ConnectionStrings__Booking";
-
     public BookingDbContext CreateDbContext(string[] args)
     {
-        // The tools prefer this factory over the application host, so it must honor the same variable the API reads.
-        var connectionString = Environment.GetEnvironmentVariable(ConnectionStringVariable)
+        // Same sources the API reads in Development: User Secrets, then environment variables.
+        var configuration = new ConfigurationBuilder()
+            .AddUserSecrets("TpFinal.Booking.Api")
+            .AddEnvironmentVariables()
+            .Build();
+
+        var connectionString = configuration.GetConnectionString("Booking")
             ?? "Host=localhost;Database=booking_design_time";
 
         var options = new DbContextOptionsBuilder<BookingDbContext>()
