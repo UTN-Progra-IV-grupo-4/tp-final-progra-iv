@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+// Contrato Booking -> Payment. Vive en Contracts porque es lo único que los servicios comparten.
+option csharp_namespace = "Contracts.Payment";
+
+package payment;
+
+service PaymentService {
+  // Cobra una reserva retenida. Es idempotente por reservation_id: si Booking reintenta,
+  // recibe el resultado del primer cobro en vez de cobrar dos veces.
+  rpc Charge (ChargeRequest) returns (ChargeResponse);
+}
+
+message ChargeRequest {
+  // Es la clave de idempotencia. Proto no tiene Guid: viaja como string y el servidor valida el formato.
+  string reservation_id = 1;
+  // Sin monto a propósito: ningún componente define precios todavía, y agregar un campo
+  // después es compatible hacia atrás, pero quitarlo no.
+}
+
+message ChargeResponse {
+  ChargeStatus status = 1;
+  // Id del cobro en Payment, para trazabilidad entre servicios.
+  string charge_id = 2;
+  // Solo se completa si status es DECLINED.
+  string failure_reason = 3;
+}
+
+// Un rechazo es un resultado de negocio, no un error: viaja en la respuesta. Los errores gRPC
+// (ej. Unavailable) quedan para las fallas técnicas, que Booking trata como "pago no disponible".
+enum ChargeStatus {
+  // proto3 usa 0 cuando el campo falta: así una respuesta vacía nunca se lee como aprobada.
+  CHARGE_STATUS_UNSPECIFIED = 0;
+  CHARGE_STATUS_APPROVED = 1;
+  CHARGE_STATUS_DECLINED = 2;
+}
