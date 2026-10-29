@@ -112,10 +112,10 @@ Services never reference each other: they only talk over HTTP, gRPC or the broke
 The Booking API requires a PostgreSQL connection string named `Booking`. In development, set it with User Secrets:
 
 ```bash
-dotnet user-secrets set "ConnectionStrings:Booking" "Host=localhost;Database=booking;Username=booking;Password=your-local-password" --project src/Booking/Booking.Api
+dotnet user-secrets set "ConnectionStrings:Booking" "Host=localhost;Database=<BOOKING_DB_NAME>;Username=<BOOKING_DB_USER>;Password=<BOOKING_DB_PASSWORD>" --project src/Booking/Booking.Api
 ```
 
-In other environments, supply it through the `ConnectionStrings__Booking` environment variable. Never commit credentials or place them in `appsettings.json`.
+Use the database name, user and password you set in your local `.env` for the Docker Compose PostgreSQL container. In other environments, supply it through the `ConnectionStrings__Booking` environment variable. Never commit credentials or place them in `appsettings.json`.
 
 Create a migration without PostgreSQL running:
 
@@ -123,10 +123,10 @@ Create a migration without PostgreSQL running:
 dotnet ef migrations add InitialCreate --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api --output-dir Migrations
 ```
 
-Apply migrations when the PostgreSQL database is accessible:
+Apply migrations when the PostgreSQL database is accessible. The EF Core tools do not read User Secrets, so set the `ConnectionStrings__Booking` environment variable first, or pass `--connection`:
 
 ```bash
-dotnet ef database update --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
+dotnet ef database update --connection "<connection string>" --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
 ```
 
 ```bash
