@@ -115,6 +115,10 @@ docker compose --profile rabbitmq up -d
 docker compose down
 ```
 
+> The PostgreSQL init script in `docker/postgres/init-multiple-dbs.sh` only runs when the database volume is empty. If you change DB names, users, or passwords, recreate the database volume with `docker compose down -v` before `docker compose up -d`.
+>
+> Avoid passwords containing a single quote (`'`), because that breaks the SQL script. Use a simple value such as letters, numbers and symbols like `-` or `_`.
+
 ## Reservation Flow
 
 1. **Query** — Any visitor queries available seats. No login required.

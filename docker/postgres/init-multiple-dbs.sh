@@ -32,6 +32,9 @@ create_db_and_user() {
     SELECT format('CREATE DATABASE %I OWNER %I', '${db_name}', '${db_user}')
     WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '${db_name}')
     \gexec
+
+    REVOKE CONNECT ON DATABASE "${db_name}" FROM PUBLIC;
+    GRANT CONNECT ON DATABASE "${db_name}" TO "${db_user}";
 EOSQL
 }
 
