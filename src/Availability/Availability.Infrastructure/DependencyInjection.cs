@@ -16,10 +16,11 @@ public static class DependencyInjection
             {
                 throw new InvalidOperationException(
                     "Falta ConnectionStrings:Availability. Configurala con user-secrets o " +
-                    "ConnectionStrings__Availability. El contenedor y el usuario dependen del issue #3.");
+                    "ConnectionStrings__Availability usando los valores de tu .env local del compose.");
             }
 
-            options.UseNpgsql(connectionString);
+            // La configuración de ejecución y la fábrica de migraciones deben coincidir.
+            options.UseNpgsql(connectionString, postgres => postgres.SetPostgresVersion(16, 0));
         });
         return services;
     }

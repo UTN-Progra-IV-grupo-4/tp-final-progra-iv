@@ -80,7 +80,7 @@ Agreed by the team and validated by the professor. Each decision has its own iss
 | Database | PostgreSQL with Entity Framework Core (Npgsql) | One PostgreSQL container with three logical databases, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
 | Authorization server | Keycloak, running as a container | OIDC for users and client credentials between services ([#5](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)) |
 | Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes; RabbitMQ exists as local fallback profile ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
-| Running everything | Docker Compose, one command | Planned in [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3) |
+| Local infrastructure | Docker Compose | PostgreSQL and Keycloak from [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3); service containers are added as implemented |
 
 Secrets, such as the Service Bus connection string, live in a local `.env` file or in `dotnet user-secrets` and are **never committed**: the repository is public. Only `.env.example` with empty values is versioned.
 
