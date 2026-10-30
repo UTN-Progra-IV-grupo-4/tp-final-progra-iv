@@ -214,3 +214,19 @@ Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`
 | Seat    | Physical place to sit                   |
 | Booking | The rental of a physical seat           |
 | Payment | Finalization of a physical seat rental  |
+
+## Punto 1 - Interpretación del diagrama de arquitectura
+
+| Componente | Rol | Justificación |
+|------------|-----|--------------|
+| Availability Site | Permite consultar asientos disponibles, solicitar reservas y consultar sus resultados. | Es el punto de entrada del usuario. Recibe las solicitudes y las publica en el broker sin esperar el resultado del procesamiento. |
+| Message Broker | Gestiona la comunicación asíncrona entre Availability y Booking. | Desacopla los servicios y permite procesar las solicitudes de reserva mediante mensajes. |
+| Booking REST API | Gestiona las reservas, controla sus estados y solicita los pagos. | Centraliza las reglas de reserva y debe impedir que dos usuarios reserven simultáneamente el mismo asiento. |
+| Payment gRPC API | Procesa las solicitudes de cobro realizadas por Booking mediante gRPC. | Separa la responsabilidad de los pagos de la gestión de reservas. |
+| Authorization Server | Gestiona la autenticación y autorización mediante tokens. | Protege las operaciones de reserva y permite autenticar las comunicaciones entre microservicios. |
+| Proveedores de identidad de terceros | Permiten integrar la autenticación con proveedores externos. | Facilitan la autenticación de usuarios mediante servicios de identidad externos. |
+| Bases de datos SQL | Almacenan la información correspondiente a cada servicio. | Garantizan la persistencia de solicitudes, reservas y pagos, manteniendo separados los datos de los microservicios. |
+| Direcciones IP públicas | Permiten el acceso externo al sitio Availability. | Proporcionan un punto de acceso público para que los usuarios puedan interactuar con el sistema. |
+| Servicio de notificaciones | Informa al usuario cuando su reserva fue confirmada después de un pago exitoso. | Desacopla el envío de notificaciones del procesamiento de reservas y cumple con el punto 3.h del enunciado. |
+
+**Nota:** El servicio de notificaciones es una incorporación requerida por el punto 3.h del enunciado y no forma parte del diagrama original de arquitectura.
