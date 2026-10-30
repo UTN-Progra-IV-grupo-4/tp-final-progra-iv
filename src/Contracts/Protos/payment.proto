@@ -14,8 +14,12 @@ service PaymentService {
 message ChargeRequest {
   // Es la clave de idempotencia. Proto no tiene Guid: viaja como string y el servidor valida el formato.
   string reservation_id = 1;
-  // Sin monto a propósito: ningún componente define precios todavía, y agregar un campo
-  // después es compatible hacia atrás, pero quitarlo no.
+  // Precio fijo por asiento que configura Booking. En centavos enteros porque proto no tiene decimal
+  // y double no representa .01 exacto; supone monedas con 2 decimales (ARS, USD).
+  // Los centavos además eligen el comportamiento de la pasarela simulada (ver Payment.Business).
+  int64 amount_cents = 2;
+  // Código ISO 4217 (ej. "ARS"). String y no enum: sumar una moneda no obliga a cambiar el contrato.
+  string currency = 3;
 }
 
 message ChargeResponse {
