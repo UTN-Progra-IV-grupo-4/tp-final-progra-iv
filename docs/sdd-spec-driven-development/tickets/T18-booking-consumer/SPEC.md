@@ -190,8 +190,9 @@ Límite de fases:
 | `T18-RQ-07` | `src/Booking/Booking.Business/Reservations/ReservationProcessingOptions.cs` | Agregado | Verificado con valor de prueba. |
 | `T18-RQ-03..07` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorTests.cs` | Agregado | 14 casos unitarios aprobados. |
 | `T18-RQ-03,04` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorIntegrationTests.cs` | Agregado | Concurrencia real aprobada. |
-| `T18-RQ-01,02,08,09` | `src/Booking/Booking.Api/Messaging/` | Agregar | Pendiente. |
-| Todos | `tests/Booking/Booking.Tests/` | Agregar | Pendiente. |
+| `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/` | Agregado | Recepción, mapeo y delegación verificados localmente; conexión real pendiente. |
+| `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/` | Agregado parcialmente | Settlement y observabilidad pendientes de F06. |
+| `T18-RQ-01,02` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración y ciclo de vida deshabilitado verificados. |
 
 ## 11. Escenarios de aceptación
 
@@ -221,3 +222,6 @@ Límite de fases:
 - Resultado acumulado después de F04: 15 pruebas correctas, 0 fallidas y 0 omitidas.
 - La prueba Business+PostgreSQL dejó exactamente una fila `Retained` y una `Rejected/SeatTaken`.
 - `dotnet build TpFinal.sln --no-restore /p:UseSharedCompilation=false`: 0 advertencias y 0 errores.
+- Resultado acumulado después de F05: 30 pruebas correctas, 0 fallidas y 0 omitidas.
+- F05 agregó pruebas del contrato `T18-G01`, coherencia de `MessageId`, delegación al processor scoped, validación de opciones y ciclo de vida con el consumer deshabilitado.
+- No se abrió una conexión a Azure Service Bus ni se consumió la subscription compartida.

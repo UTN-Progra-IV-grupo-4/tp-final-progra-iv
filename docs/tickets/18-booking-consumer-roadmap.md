@@ -213,7 +213,7 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 | `T18-F02` Contratos y configuración | `PROVISORIO` | Avanzar con `T18-G01` y confirmar contrato #15 y duración de retención. | El gap queda aislado; al cerrar, se usa el contrato definitivo sin afectar Business/Data. |
 | `T18-F03` Data | `VALIDADO` | Implementar consultas e inserciones race-safe. | Distingue creado, duplicado y asiento ocupado. |
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
-| `T18-F05` Consumer | `PENDIENTE` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Inicia, recibe, mapea el contrato provisorio y delega a Business sin crear un contrato compartido paralelo. |
+| `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente; conexión real diferida hasta completar F06. |
 | `T18-F06` Settlement y observabilidad local | `PENDIENTE` | Completar, reintentar o dead-letter y generar logs locales. | Cada resultado tiene acción y trazabilidad explícitas; la auditoría distribuida completa queda en #24. |
 | `T18-F07` Pruebas | `PENDIENTE` | Verificar casos funcionales, duplicados y concurrencia real. | Dos solicitudes simultáneas producen una retenida y una rechazada. |
 | `T18-F08` Documentación y defensa | `PENDIENTE` | Documentar ejecución, diagramas y argumentos. | Otro integrante puede ejecutar y explicar la solución. |
@@ -269,9 +269,15 @@ tp-final-progra-iv/
 │           ├── [M] Program.cs
 │           ├── [M] appsettings.json
 │           └── [A] Messaging/
-│               ├── AzureServiceBusOptions.cs
+│               ├── BrokerOptions.cs
 │               ├── IReservationRequestConsumer.cs
 │               ├── AzureServiceBusReservationRequestConsumer.cs
+│               ├── BookingMessagingServiceCollectionExtensions.cs
+│               ├── ReservationRequestConsumerHostedService.cs
+│               ├── ReservationRequestDelivery.cs
+│               ├── ReservationRequestHandlingResult.cs
+│               ├── ReservationRequestMappingResult.cs
+│               ├── ReservationRequestMessageHandler.cs
 │               ├── ReservationRequestMapper.cs
 │               └── [A][P][R] ProvisionalReservationRequestMessage.cs
 │
@@ -284,6 +290,9 @@ tp-final-progra-iv/
 │           ├── Data/ReservationRepositoryIntegrationTests.cs
 │           ├── Business/ReservationRequestProcessorTests.cs
 │           ├── Business/ReservationRequestProcessorIntegrationTests.cs
+│           ├── Messaging/BrokerOptionsTests.cs
+│           ├── Messaging/ReservationRequestConsumerHostedServiceTests.cs
+│           ├── Messaging/ReservationRequestMessageHandlerTests.cs
 │           └── Messaging/[P] ReservationRequestMapperTests.cs
 │
 ├── [N] README.md
@@ -325,7 +334,7 @@ Estado: `VALIDADO`.
 
 ### T18-C04 - Adaptador de Azure Service Bus
 
-Estado: `PENDIENTE`.
+Estado: `PARCIAL`. F05 está implementado y verificado localmente; F06 y la prueba contra el broker continúan pendientes.
 
 - Agrega el SDK y la configuración del broker en Booking.Api.
 - Agrega el ciclo de vida provisorio del consumer según `T18-G02`.
@@ -531,6 +540,17 @@ Booking.Business nunca referencia Api, Contracts o Azure Service Bus.
 - Gaps relacionados: `T18-G01`, `T18-G02`.
 - Cambios relacionados: documentación personal; sin cambios en código productivo.
 
+### T18-F05-P02 - Integrar el consumer
+
+- Fecha: 2026-10-31
+- Estado: `PARCIAL`
+- Prompt: “Implementá F05 en Booking.Api usando las opciones guardadas en User Secrets y el modelo privado provisorio T18-G01 mientras #15 siga pendiente. Leé topic y subscription desde configuración, iniciá y detené el adaptador, deserializá, mapeá y delegá el comando a Business. Mantené el gap aislado en Booking.Api y aplicá T18-G02 sin presentar sus decisiones provisorias como acuerdos del equipo. No ejecutes el consumer contra la subscription compartida antes de completar F06”.
+- Contexto: implementar solamente recepción, mapeo y delegación, conservando settlement, retries, dead-letter y observabilidad completa para F06.
+- Respuesta clave (`T18-F05-R02`): se incorporó `Azure.Messaging.ServiceBus` 7.21.0, un puerto de consumo hospedado en Booking.Api, configuración validada, `T18-G01`, mapper y handler con scope por mensaje. El consumer queda deshabilitado por defecto y no se abrió la subscription compartida.
+- Evidencia: suite Booking.Tests con 30 pruebas correctas y solución completa con 0 advertencias y 0 errores.
+- Gaps relacionados: `T18-G01`, `T18-G02`.
+- Cambios relacionados: `T18-C04`; F06 permanece pendiente.
+
 ## 11. Prompts previstos
 
 Estos prompts son guías. Se registrarán como historial real solamente cuando se ejecuten.
@@ -540,12 +560,6 @@ Estos prompts son guías. Se registrarán como historial real solamente cuando s
 > Revisá el estado actual de #15 y confirmá el contrato que consumirá Booking. Identificá campos, metadata, MessageId y CorrelationId. No inventes un contrato paralelo. Confirmá también la duración acordada para la retención.
 
 Resultado esperado (`T18-F02-R02`): contrato final trazable, eliminación de `T18-G01` y duración configurable aceptada.
-
-### T18-F05-P02 - Integrar el consumer
-
-> Implementá F05 en Booking.Api usando las opciones ya guardadas en User Secrets y el modelo privado provisorio `T18-G01` mientras #15 siga pendiente. Leé topic y subscription desde configuración, iniciá y detené el adaptador, deserializá, mapeá y delegá el comando a Business. Mantené el tipo provisorio y su mapper aislados en Booking.Api, no agregues un contrato paralelo a `src/Contracts` y tratá las decisiones concretas del SDK conforme a `T18-G02` sin presentarlas como acuerdos del equipo. No ejecutes el consumer contra la subscription compartida antes de completar F06.
-
-Resultado esperado (`T18-F05-R02`): adaptador que inicia y se detiene correctamente, consume la configuración, transforma `T18-G01` y delega a Business, con el gap limitado al borde de Booking.Api.
 
 ### T18-F06-P01 - Settlement y observabilidad
 

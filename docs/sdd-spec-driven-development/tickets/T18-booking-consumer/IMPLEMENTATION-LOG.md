@@ -101,3 +101,54 @@ Implementar `T18-F04` en Booking.Business para convertir automáticamente `SeatT
 ### Estado
 
 `VERIFIED` para `T18-F04`. El próximo bloque es `T18-F05`, adaptador de Azure Service Bus con contrato privado provisorio.
+
+## 2026-10-31 - Consumer de Azure Service Bus, F05
+
+### Alcance
+
+- Se implementó la configuración, ciclo de vida, recepción, deserialización, mapeo y delegación de F05 dentro de Booking.Api.
+- Se utilizó el contrato privado provisorio `T18-G01`; no se agregó ningún tipo a `src/Contracts`.
+- Se mantuvieron como provisorias las decisiones de `T18-G02`.
+- No se implementaron todavía las decisiones finales de `Complete`, `DeadLetter`, retry ni observabilidad de F06.
+
+### Comportamiento implementado
+
+1. Booking.Api enlaza `Broker:Provider` y `Broker:AzureServiceBus` desde configuración.
+2. Las credenciales, topic y subscription son obligatorias solamente si el consumer se habilita.
+3. La configuración versionada deja `Broker:AzureServiceBus:Enabled = false`.
+4. El hosted service delega inicio y detención al puerto `IReservationRequestConsumer`.
+5. El adaptador usa `Azure.Messaging.ServiceBus` 7.21.0 y procesamiento manual con `AutoCompleteMessages = false`.
+6. El mapper valida JSON, identificadores, formato de `MessageId` y coincidencia con `requestId`.
+7. Cada mensaje válido crea un scope y resuelve allí `IReservationRequestProcessor`.
+8. Business y Data permanecen independientes del SDK del broker.
+
+### Archivos principales
+
+- `Booking.Api/Messaging/BrokerOptions.cs`.
+- `Booking.Api/Messaging/IReservationRequestConsumer.cs`.
+- `Booking.Api/Messaging/AzureServiceBusReservationRequestConsumer.cs`.
+- `Booking.Api/Messaging/ReservationRequestConsumerHostedService.cs`.
+- `Booking.Api/Messaging/ProvisionalReservationRequestMessage.cs`.
+- `Booking.Api/Messaging/ReservationRequestMapper.cs`.
+- `Booking.Api/Messaging/ReservationRequestMessageHandler.cs`.
+- `Booking.Tests/Messaging/`.
+
+### Evidencia
+
+| Validación | Resultado |
+|---|---|
+| Restauración | SDK oficial `Azure.Messaging.ServiceBus` 7.21.0 restaurado. |
+| Suite Booking.Tests | 30 correctas, 0 fallidas, 0 omitidas. |
+| Mapper provisorio | Mensaje válido, JSON inválido, identificadores vacíos, `MessageId` ausente, inválido o diferente. |
+| Delegación | El handler crea un scope y delega el comando estable a Business. |
+| Ciclo de vida | Inicio y detención delegados; configuración deshabilitada no abre el broker. |
+| Compilación de la solución | 0 advertencias y 0 errores. |
+| Seguridad | Sin connection strings ni claves versionadas. |
+
+### Estado
+
+`PARCIAL` para `T18-F05`: la implementación local está verificada, pero el contrato continúa siendo provisorio y no se ejecutó una recepción real. La activación contra Azure Service Bus queda bloqueada hasta completar F06.
+
+### Próximo cambio permitido por la especificación
+
+Implementar `T18-F06`: relacionar cada resultado de mapper y Business con `Complete`, `DeadLetter` o reintento, y agregar observabilidad local con `RequestId` y `CorrelationId` sin registrar secretos.
