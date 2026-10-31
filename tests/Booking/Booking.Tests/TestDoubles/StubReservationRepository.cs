@@ -7,10 +7,22 @@ public sealed class StubReservationRepository : IReservationRepository
 {
     private readonly Queue<ReservationInsertResult> results = new();
     private readonly List<Reservation> attemptedReservations = [];
+    private readonly List<Reservation> expiredReservations = [];
+    private readonly HashSet<Guid> expirationFailures = [];
 
     public IReadOnlyList<Reservation> AttemptedReservations => attemptedReservations;
+    public List<(Guid ReservationId, DateTimeOffset Now)> ExpirationAttempts { get; } = [];
 
     public void EnqueueResult(ReservationInsertResult result) => results.Enqueue(result);
+
+    public void AddExpiredReservation(Reservation reservation, bool expirationSucceeds = true)
+    {
+        expiredReservations.Add(reservation);
+        if (!expirationSucceeds)
+        {
+            expirationFailures.Add(reservation.Id);
+        }
+    }
 
     public Task<ReservationInsertResult> TryInsertAsync(
         Reservation reservation,
@@ -32,7 +44,12 @@ public sealed class StubReservationRepository : IReservationRepository
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult<IReadOnlyList<Reservation>>([]);
+        IReadOnlyList<Reservation> reservations = expiredReservations
+            .Where(reservation =>
+                reservation.Status == ReservationStatus.Retained &&
+                reservation.ExpiresAt <= now)
+            .ToList();
+        return Task.FromResult(reservations);
     }
 
     public Task<bool> TryExpireAsync(
@@ -41,7 +58,14 @@ public sealed class StubReservationRepository : IReservationRepository
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(false);
+        ExpirationAttempts.Add((reservationId, now));
+        var reservation = expiredReservations.SingleOrDefault(
+            candidate => candidate.Id == reservationId);
+        return Task.FromResult(
+            reservation is not null &&
+            reservation.Status == ReservationStatus.Retained &&
+            reservation.ExpiresAt <= now &&
+            !expirationFailures.Contains(reservationId));
     }
 
     private static Reservation Clone(Reservation reservation) =>
