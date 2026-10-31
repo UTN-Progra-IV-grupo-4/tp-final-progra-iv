@@ -8,6 +8,88 @@ namespace Booking.Tests.Data;
 public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixture)
 {
     [Fact]
+    public async Task GetExpiredReservationsAsync_ReturnsOnlyRetainedReservationsExpiredAtOrBeforeNow()
+    {
+        await fixture.ResetAsync();
+        var now = DateTimeOffset.UtcNow;
+        var expiredReservation = CreateRetainedReservation();
+        expiredReservation.ExpiresAt = now;
+        var futureReservation = CreateRetainedReservation();
+        futureReservation.ExpiresAt = now.AddTicks(1);
+        var confirmedReservation = CreateRetainedReservation();
+        confirmedReservation.Status = ReservationStatus.Confirmed;
+        confirmedReservation.ExpiresAt = now.AddMinutes(-1);
+        var noExpiryReservation = CreateRetainedReservation();
+        noExpiryReservation.ExpiresAt = null;
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.AddRange(
+            expiredReservation,
+            futureReservation,
+            confirmedReservation,
+            noExpiryReservation);
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+
+        var expiredReservations = await repository.GetExpiredReservationsAsync(now);
+
+        var reservation = Assert.Single(expiredReservations);
+        Assert.Equal(expiredReservation.Id, reservation.Id);
+    }
+
+    [Fact]
+    public async Task TryExpireAsync_WhenReservationIsStillExpiredAndRetained_UpdatesItToExpired()
+    {
+        await fixture.ResetAsync();
+        var now = DateTimeOffset.UtcNow;
+        var reservation = CreateRetainedReservation();
+        reservation.ExpiresAt = now;
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.Add(reservation);
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+
+        var expired = await repository.TryExpireAsync(reservation.Id, now);
+
+        Assert.True(expired);
+        var storedReservation = await dbContext.Reservations
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal(ReservationStatus.Expired, storedReservation.Status);
+    }
+
+    [Theory]
+    [InlineData(ReservationStatus.Confirmed, -1)]
+    [InlineData(ReservationStatus.Retained, 1)]
+    public async Task TryExpireAsync_WhenReservationNoLongerMatchesConditions_DoesNotUpdate(
+        ReservationStatus status,
+        int expiryOffsetMinutes)
+    {
+        await fixture.ResetAsync();
+        var now = DateTimeOffset.UtcNow;
+        var reservation = CreateRetainedReservation();
+        reservation.Status = status;
+        reservation.ExpiresAt = now.AddMinutes(expiryOffsetMinutes);
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.Add(reservation);
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+
+        var expired = await repository.TryExpireAsync(reservation.Id, now);
+
+        Assert.False(expired);
+        var storedReservation = await dbContext.Reservations
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal(status, storedReservation.Status);
+    }
+
+    [Fact]
     public async Task TryInsertAsync_WhenSeatIsFree_CreatesRetainedReservation()
     {
         await fixture.ResetAsync();
