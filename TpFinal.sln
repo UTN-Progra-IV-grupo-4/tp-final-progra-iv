@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Payment.Grpc", "src\Payment
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Payment.Data", "src\Payment\Payment.Data\Payment.Data.csproj", "{DD736900-3804-477F-B0DB-98D3F2AFC6C9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Payment.Business", "src\Payment\Payment.Business\Payment.Business.csproj", "{E44E65FE-4351-4F9C-8BE0-57D716261976}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -91,6 +93,18 @@ Global
 		{DD736900-3804-477F-B0DB-98D3F2AFC6C9}.Release|x64.Build.0 = Release|Any CPU
 		{DD736900-3804-477F-B0DB-98D3F2AFC6C9}.Release|x86.ActiveCfg = Release|Any CPU
 		{DD736900-3804-477F-B0DB-98D3F2AFC6C9}.Release|x86.Build.0 = Release|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Debug|x64.Build.0 = Debug|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Debug|x86.Build.0 = Debug|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Release|x64.ActiveCfg = Release|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Release|x64.Build.0 = Release|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Release|x86.ActiveCfg = Release|Any CPU
+		{E44E65FE-4351-4F9C-8BE0-57D716261976}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -104,5 +118,6 @@ Global
 		{FE9050FB-983E-C37B-EEA3-5C8ABB4CBAF9} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{FB378F75-6DA9-43F8-B6E1-0CC8F9375100} = {FE9050FB-983E-C37B-EEA3-5C8ABB4CBAF9}
 		{DD736900-3804-477F-B0DB-98D3F2AFC6C9} = {FE9050FB-983E-C37B-EEA3-5C8ABB4CBAF9}
+		{E44E65FE-4351-4F9C-8BE0-57D716261976} = {FE9050FB-983E-C37B-EEA3-5C8ABB4CBAF9}
 	EndGlobalSection
 EndGlobal
