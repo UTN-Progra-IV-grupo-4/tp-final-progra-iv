@@ -34,13 +34,19 @@ El material de la cursada justifica conceptos y decisiones de diseño. Los detal
 Dependencias relacionadas:
 
 - [#4 - Decisión de message broker](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4).
+- [#13 - Availability: ver asientos disponibles](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/13).
 - [#15 - Contrato y publicación de la solicitud](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/15).
 - [#17 - Estructura y persistencia de Booking](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/17).
+- [#18 - Booking: consumir solicitudes de reserva](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/18).
+- [#19 - Booking: procesar el pago por gRPC](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/19).
 - [#20 - Vencimiento de reservas retenidas](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/20).
+- [#22 - Payment: servicio gRPC](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/22).
 
 ## 3. Objetivo y alcance
 
 Booking debe consumir solicitudes desde la suscripción `booking`, guardar una reserva `Retained` cuando el asiento esté libre y guardar una reserva `Rejected/SeatTaken` cuando esté ocupado.
+
+Cada solicitud representa un solo asiento. El mensaje comunica solicitud, evento y asiento; no transporta cantidad, monto ni moneda.
 
 También debe:
 
@@ -52,6 +58,7 @@ También debe:
 Fuera del alcance de T18:
 
 - Llamar a Payment y confirmar el pago: #19.
+- Definir `Payment:Amount` y `Payment:Currency`: #19 y #22.
 - Vencer reservas: #20.
 - Exponer el endpoint de consulta: #21.
 - Crear el contrato productor: #15.
@@ -64,8 +71,8 @@ Fuera del alcance de T18:
 - Azure Service Bus está configurado mediante User Secrets.
 - `Reservation.Id` es la clave primaria y representa el id de solicitud.
 - Existe un índice único parcial sobre `(EventId, SeatId)` para `Retained` y `Confirmed`.
-- La rama contiene F03 y F04 implementados, verificados, commiteados y publicados en el remoto.
-- Todavía no existe el consumer de Azure Service Bus; el caso de uso, el repositorio específico y el proyecto de pruebas ya están implementados.
+- La rama contiene F03 a F06 implementados y verificados localmente; F05 y F06 continúan parciales hasta probarse con Azure Service Bus.
+- El consumer permanece deshabilitado por configuración y no se utilizó la subscription compartida.
 
 ## 5. Decisiones técnicas
 
@@ -105,6 +112,22 @@ Estado: `CURSO-VALIDADO` por el responsable el 2026-10-31.
 
 El consumer registra inicio, resultado y error con `RequestId` y, cuando exista, `CorrelationId`, sin incluir secretos. La auditoría distribuida completa permanece en #24.
 
+### T18-D07 - Una solicitud representa un asiento
+
+Estado: `VALIDADO` por #13, #15, #18, #19 y #22.
+
+El mensaje comunica el id de solicitud, el evento y el asiento. No transporta cantidad, monto ni moneda. `MessageId` es igual al id de solicitud y debe existir un correlation id y un tipo de mensaje. El precio fijo se toma posteriormente de `Payment:Amount` y `Payment:Currency` al implementar #19.
+
+### Revisión cruzada de tickets del 2026-10-31
+
+| Ticket | Definición que afecta a #18 | Resultado |
+|---|---|---|
+| #13 | Se elige un solo asiento por solicitud. | Alineado; sin cambio de código. |
+| #15 | Evento y asiento sin cantidad ni monto; `MessageId` igual al id; correlation id y tipo obligatorios. | Semántica oficial; formato concreto todavía bloqueado. |
+| #18 | Un asiento, índice parcial, idempotencia y mensaje de ejemplo permitido mientras #15 no esté mergeado. | Valida `T18-G01` como mecanismo temporal. |
+| #19 | Payment recibe reserva, monto y moneda desde configuración de Booking. | Fuera de #18; no agregar esos campos al mensaje. |
+| #22 | Payment persiste reserva, monto y moneda; una reserva equivale a un cobro. | Sin cambio en F03-F06. |
+
 ### Alineación validada con las clases 01 a 12
 
 | Decisión | Fundamento de cursada | Alcance validado |
@@ -122,7 +145,7 @@ Estas cuatro relaciones fueron validadas expresamente por Alejandro el 2026-10-3
 
 Estado: `BLOQUEADO` para cerrar la integración final, reemplazado provisoriamente por `T18-G01` durante el desarrollo.
 
-No se debe crear un contrato paralelo. Hasta que #15 se integre, se puede desarrollar el caso de uso con un comando interno y adaptar el contrato después.
+La revisión actual confirmó que `docs/contracts/reservation-request.md` no existe en `develop` y `src/Contracts` todavía no contiene la clase de solicitud. No se debe crear un contrato paralelo. Hasta que #15 se integre, se conserva el comando interno y se adapta el contrato después.
 
 ### T18-B02 - Duración de la retención
 
@@ -140,6 +163,15 @@ Para avanzar se utilizará un modelo privado del adaptador de `Booking.Api`, nun
 
 Este gap queda aprobado para iniciar el desarrollo. No representa una propuesta de contrato para Availability: solamente permite deserializar un mensaje de prueba y mapearlo al comando interno estable de Business.
 
+Reglas ya oficiales que `T18-G01` respeta:
+
+- Un asiento por solicitud.
+- Evento y asiento, sin cantidad, monto ni moneda.
+- `MessageId` igual al id de solicitud.
+- Presencia de correlation id y tipo de mensaje.
+
+`T18-G01` conserva el correlation id cuando llega, pero todavía no rechaza su ausencia ni valida el tipo: #15 debe definir primero su ubicación y nombre exactos.
+
 Contrato candidato mínimo:
 
 ```json
@@ -150,20 +182,20 @@ Contrato candidato mínimo:
 }
 ```
 
-Metadata candidata del broker:
+Metadata del broker:
 
-| Dato | Valor provisorio |
-|---|---|
-| `MessageId` | Igual a `requestId`. |
-| `CorrelationId` | Se conserva y se propaga a logs; su regla de generación queda a confirmar. |
-| `Subject` | Tipo de mensaje de solicitud de reserva; nombre exacto a confirmar. |
+| Dato | Definición oficial | Detalle provisorio |
+|---|---|---|
+| `MessageId` | Igual al id de solicitud. | Formato y presencia adicional de `requestId` en el body. |
+| `CorrelationId` | Debe existir y Booking lo conserva. | Ubicación, formato y generación. |
+| Tipo | Debe existir. | `Subject` u otra propiedad y nombre exacto. |
 
 Puntos que #15 puede modificar:
 
 - Nombres y casing de las propiedades JSON.
 - Presencia de `requestId` dentro del cuerpo o solamente en `MessageId`.
-- Nombre exacto de `Subject`.
-- Regla de `CorrelationId`.
+- Clase, namespace, formato JSON y nombre exacto de `Subject` o mecanismo equivalente.
+- Ubicación, formato y regla de generación de `CorrelationId`.
 - Campos adicionales del productor.
 
 Límite de impacto:
@@ -202,7 +234,7 @@ Este gap reúne decisiones necesarias para implementar F05 y F06 que todavía no
 | Ajustes del SDK | Concurrencia, prefetch, renovación de lock y límites de reintento sin valores definitivos. | Definir con pruebas o acuerdo del equipo. |
 | Smoke test | No consumir la subscription compartida sin autorización explícita y control del mensaje de prueba. | Coordinar la prueba o usar un recurso aislado. |
 
-F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y delegación a Business. F06 cubre settlement, retries, dead-letter y observabilidad local. El consumer no se ejecutará contra la subscription compartida antes de completar F06.
+F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y delegación a Business. F06 cubre settlement, retries, dead-letter y observabilidad local. Aunque F06 ya está verificado localmente, el consumer permanece deshabilitado hasta una prueba controlada y autorizada.
 
 ## 8. Fases de desarrollo
 
@@ -213,7 +245,7 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 | `T18-F02` Contratos y configuración | `PROVISORIO` | Avanzar con `T18-G01` y confirmar contrato #15 y duración de retención. | El gap queda aislado; al cerrar, se usa el contrato definitivo sin afectar Business/Data. |
 | `T18-F03` Data | `VALIDADO` | Implementar consultas e inserciones race-safe. | Distingue creado, duplicado y asiento ocupado. |
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
-| `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente; conexión real diferida hasta completar F06. |
+| `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente; conexión real diferida hasta una prueba controlada y autorizada. |
 | `T18-F06` Settlement y observabilidad local | `PARCIAL` | Completar, reintentar o dead-letter y generar logs locales. | Implementado y verificado localmente; evidencia contra Azure real pendiente. |
 | `T18-F07` Pruebas | `PENDIENTE` | Verificar casos funcionales, duplicados y concurrencia real. | Dos solicitudes simultáneas producen una retenida y una rechazada. |
 | `T18-F08` Documentación y defensa | `PENDIENTE` | Documentar ejecución, diagramas y argumentos. | Otro integrante puede ejecutar y explicar la solución. |
@@ -564,15 +596,26 @@ Booking.Business nunca referencia Api, Contracts o Azure Service Bus.
 - Gaps relacionados: `T18-G01`, `T18-G02`.
 - Restricción conservada: `Broker:AzureServiceBus:Enabled = false`; no se abrió la subscription compartida.
 
+### T18-F02-P02 - Revalidar contrato y tickets relacionados
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Actualizá únicamente la especificación personal y la hoja de ruta del ticket #18 con la revisión de los tickets #13, #15, #18, #19 y #22. Marcá como oficiales las reglas de un asiento por solicitud, ausencia de cantidad/monto/moneda, MessageId igual al id de solicitud y presencia de correlation id. Conservá como provisorios el formato JSON, nombres, casing, Subject y ubicación o generación del correlation id. Confirmá que #15 sigue bloqueando el reemplazo de T18-G01 y que la duración de retención continúa sin definición. No modifiques código ni implementes F07”.
+- Respuesta clave (`T18-F02-R02`): se separaron las reglas semánticas oficiales de la representación provisoria. #15 continúa abierto y sin contrato físico en `develop`; `T18-G01` sigue siendo necesario. #18 conserva la duración de retención como “A definir”.
+- Decisiones relacionadas: `T18-D02`, `T18-D05`, `T18-D07`.
+- Bloqueos relacionados: `T18-B01`, `T18-B02`.
+- Gaps relacionados: `T18-G01`.
+- Cambios relacionados: documentación personal; sin código ni F07.
+
 ## 11. Prompts previstos
 
 Estos prompts son guías. Se registrarán como historial real solamente cuando se ejecuten.
 
-### T18-F02-P02 - Resolver definitivamente las dependencias
+### T18-F02-P03 - Resolver definitivamente las dependencias
 
 > Revisá el estado actual de #15 y confirmá el contrato que consumirá Booking. Identificá campos, metadata, MessageId y CorrelationId. No inventes un contrato paralelo. Confirmá también la duración acordada para la retención.
 
-Resultado esperado (`T18-F02-R02`): contrato final trazable, eliminación de `T18-G01` y duración configurable aceptada.
+Resultado esperado (`T18-F02-R03`): contrato final trazable, eliminación de `T18-G01` y duración configurable aceptada.
 
 ### T18-F07-P01 - Verificar aceptación
 

@@ -34,6 +34,7 @@ Una réplica de Booking consume una solicitud de un solo asiento. Si el asiento 
 
 - Publicar el mensaje desde Availability: #15.
 - Cobrar y confirmar la reserva: #19 y #22.
+- Definir o transportar cantidad, monto o moneda: #13, #15, #19 y #22 confirman que no pertenecen a la solicitud consumida por #18.
 - Vencer una retención: #20.
 - Exponer el estado por HTTP: #21.
 - Implementar la auditoría distribuida completa: #24.
@@ -47,10 +48,10 @@ Una réplica de Booking consume una solicitud de un solo asiento. Si el asiento 
 | `T18-RQ-03` | Crear `Retained` cuando el asiento esté libre. | Verificado en Business y Data | Prueba de integración PostgreSQL aprobada. |
 | `T18-RQ-04` | Persistir `Rejected/SeatTaken` cuando el asiento esté ocupado. | Verificado en Business y Data | Prueba concurrente Business+PostgreSQL aprobada. |
 | `T18-RQ-05` | Tratar una reentrega compatible como duplicado exitoso. | Verificado en Business | Prueba unitaria de idempotencia aprobada. |
-| `T18-RQ-06` | Rechazar el mismo RequestId con otro evento o asiento. | Business verificado; settlement pendiente | Pruebas unitarias de conflicto aprobadas. |
+| `T18-RQ-06` | Rechazar el mismo RequestId con otro evento o asiento. | Verificado localmente en Business y settlement | Pruebas unitarias de conflicto y dead-letter aprobadas. |
 | `T18-RQ-07` | Calcular `ExpiresAt` en UTC con una duración configurable. | Implementación verificada; valor final bloqueado | Prueba con TimeProvider fijo aprobada. |
-| `T18-RQ-08` | Completar el mensaje solamente después de persistir el resultado. | Pendiente | Prueba de settlement. |
-| `T18-RQ-09` | Reintentar errores transitorios y enviar mensajes inválidos a dead-letter. | Pendiente | Pruebas de settlement. |
+| `T18-RQ-08` | Completar el mensaje solamente después de persistir el resultado. | Verificado localmente | Pruebas unitarias de settlement aprobadas; falta prueba real. |
+| `T18-RQ-09` | Reintentar errores transitorios y enviar mensajes inválidos a dead-letter. | Verificado localmente | Pruebas de propagación y dead-letter aprobadas; falta prueba real. |
 
 ## 5. Reglas e invariantes
 
@@ -90,9 +91,26 @@ El procesamiento registra inicio, resultado y error con `RequestId` y, cuando es
 
 Estado: `CURSO-VALIDADO`. Fundamento: logging, metadatos y propagación de identificadores en C09-P04, C09-P05 y C09-P06. La auditoría distribuida completa permanece fuera de alcance y pertenece a #24.
 
-## 6. Contrato de entrada provisorio
+### T18-BR-09 - Un asiento por solicitud
 
-Estado: `PROVISORIO`, identificado como `T18-G01`.
+Cada mensaje representa exactamente un asiento. Lleva la identidad de la solicitud, el evento y el asiento; no incluye cantidad, monto ni moneda. El precio fijo se incorpora posteriormente en Booking al ejecutar #19 y #22.
+
+Estado: `VALIDADO` por las definiciones actuales de #13, #15, #18, #19 y #22.
+
+## 6. Contrato de entrada: reglas oficiales y representación provisoria
+
+La revisión del 2026-10-31 distingue las reglas ya cerradas por los tickets de la forma concreta todavía pendiente del contrato de #15.
+
+| Regla oficial | Fuente |
+|---|---|
+| Una solicitud representa un solo asiento. | #13, #15, #18, #19 y #22. |
+| El mensaje comunica evento y asiento, sin cantidad, monto ni moneda. | #15, #19 y #22. |
+| `MessageId` es igual al id de solicitud. | #15. |
+| El mensaje debe transportar un correlation id y un tipo de mensaje. | #15. |
+
+Representación de desarrollo: `PROVISORIA`, identificada como `T18-G01`.
+
+El siguiente JSON es solamente la forma candidata usada por Booking.Api; los nombres, casing y presencia de `requestId` en el body no están definidos todavía por #15:
 
 ```json
 {
@@ -102,17 +120,19 @@ Estado: `PROVISORIO`, identificado como `T18-G01`.
 }
 ```
 
-Metadata provisional:
+Metadata y estado:
 
-| Dato | Regla |
-|---|---|
-| `MessageId` | Igual a RequestId. |
-| `CorrelationId` | Se conserva para logs y propagación. |
-| `Subject` | Nombre exacto pendiente de #15. |
+| Dato | Regla oficial | Detalle todavía provisorio |
+|---|---|---|
+| `MessageId` | Igual al id de solicitud. | Formato concreto y si `requestId` también aparece en el body. |
+| `CorrelationId` | Debe estar presente y Booking lo conserva. | Ubicación, formato y regla de generación. |
+| Tipo de mensaje | Debe estar presente. | Uso de `Subject` u otra propiedad y nombre exacto. |
 
 El modelo vive solamente en `Booking.Api`. No se agrega a `src/Contracts`. Cuando #15 publique el contrato definitivo se reemplazarán el tipo de entrada y el mapper, sin modificar Business ni Data.
 
-También son provisorias las reglas exactas de deserialización y validación del mapper. Como base de desarrollo se rechazarán JSON inválidos, identificadores vacíos y diferencias entre `MessageId` y `requestId`; la validación de `Subject` queda pendiente del contrato de #15.
+Continúan provisorios el formato JSON, clase, namespace, nombres, casing, `Subject` o mecanismo equivalente, ubicación o generación del correlation id y campos adicionales. Como base de desarrollo se rechazan JSON inválidos, identificadores vacíos y diferencias entre `MessageId` y `requestId`; la validación del tipo exacto queda pendiente del contrato de #15.
+
+Aunque la presencia de correlation id y tipo ya es una regla oficial, `T18-G01` todavía no rechaza su ausencia porque #15 no definió dónde ni con qué nombre se transportan. Esa validación se agrega al reemplazar el contrato, sin inventar una ubicación provisoria.
 
 ## 7. Diseño por capas
 
@@ -184,7 +204,7 @@ Límite de fases:
 
 - F05 configura el adaptador, recibe, deserializa, mapea y delega a Business.
 - F06 cierra las decisiones de settlement, retries, dead-letter y observabilidad local.
-- No se ejecutará el consumer contra la subscription compartida hasta que las rutas de F06 estén implementadas.
+- El consumer permanece deshabilitado hasta una prueba controlada y autorizada; completar F06 localmente no autoriza por sí solo el consumo de la subscription compartida.
 
 ## 10. Mapa especificación-código
 
@@ -221,9 +241,9 @@ Límite de fases:
 
 | ID | Pendiente | Impacto | Condición de cierre |
 |---|---|---|---|
-| `T18-G01` | Contrato definitivo de #15. | Impide cerrar la integración. | Reemplazar mensaje provisorio y validar con mensaje real. |
+| `T18-G01` | Clase y documentación del contrato definitivo de #15 todavía ausentes de `develop`. | Impide cerrar la integración aunque las reglas semánticas básicas ya estén definidas. | Reemplazar modelo y mapper provisorios y validar con un mensaje producido desde el contrato compartido. |
 | `T18-G02` | Detalles técnicos del consumer y settlement. | Permite avanzar, pero no debe presentarse como decisión del equipo. | Implementar, probar y registrar la alternativa final; mantener provisorio lo que siga sin acuerdo. |
-| `T18-B02` | Duración de retención. | Impide calcular el `ExpiresAt` final. | Acordar valor y configurarlo. |
+| `T18-B02` | Duración de retención todavía “A definir” en #18. | Impide calcular el `ExpiresAt` final. | Acordar valor y configurarlo sin hardcodearlo. |
 | `T18-E01` | Docker/PostgreSQL para pruebas. | Cerrado: Docker Desktop y Testcontainers operativos. | Cumplida el 2026-10-31. |
 
 ## 13. Evidencia actual
