@@ -214,7 +214,7 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 | `T18-F03` Data | `VALIDADO` | Implementar consultas e inserciones race-safe. | Distingue creado, duplicado y asiento ocupado. |
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
 | `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente; conexión real diferida hasta completar F06. |
-| `T18-F06` Settlement y observabilidad local | `PENDIENTE` | Completar, reintentar o dead-letter y generar logs locales. | Cada resultado tiene acción y trazabilidad explícitas; la auditoría distribuida completa queda en #24. |
+| `T18-F06` Settlement y observabilidad local | `PARCIAL` | Completar, reintentar o dead-letter y generar logs locales. | Implementado y verificado localmente; evidencia contra Azure real pendiente. |
 | `T18-F07` Pruebas | `PENDIENTE` | Verificar casos funcionales, duplicados y concurrencia real. | Dos solicitudes simultáneas producen una retenida y una rechazada. |
 | `T18-F08` Documentación y defensa | `PENDIENTE` | Documentar ejecución, diagramas y argumentos. | Otro integrante puede ejecutar y explicar la solución. |
 | `T18-F09` Cierre | `PENDIENTE` | Revisar diff, compilar y preparar PR. | Checklist completo y PR hacia `develop`. |
@@ -551,6 +551,19 @@ Booking.Business nunca referencia Api, Contracts o Azure Service Bus.
 - Gaps relacionados: `T18-G01`, `T18-G02`.
 - Cambios relacionados: `T18-C04`; F06 permanece pendiente.
 
+### T18-F06-P01 - Validar e implementar settlement y observabilidad
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Registrá la validación de la matriz de settlement de F06 y luego implementala. Completá Retained, Duplicate y SeatTaken; enviá a dead-letter los errores determinísticos del mapper, RequestConflict e InvalidRequest; dejá las excepciones para reintento mediante propagación. Agregá logs seguros con RequestId y CorrelationId y pruebas unitarias de cada decisión. Mantené el consumer deshabilitado y no te conectes todavía a la subscription compartida”.
+- Contexto: la matriz fue revisada previamente contra el comportamiento de `ServiceBusProcessor` 7.21.0 y aprobada expresamente por Alejandro.
+- Resultado esperado (`T18-F06-R01`): settlement determinístico y probado localmente, excepciones propagadas para reintento, logs sin payload ni secretos y cero conexiones al broker compartido.
+- Respuesta clave (`T18-F06-R01`): se agregó un decisor puro, un coordinador de procesamiento y un adaptador de settlement del SDK. Los éxitos se completan, los errores determinísticos van a dead-letter y las excepciones se propagan sin ejecutar una segunda acción. Los logs usan identificadores y tipos de excepción, nunca body ni excepción cruda.
+- Evidencia: suite Booking.Tests con 48 pruebas correctas; solución completa con 0 advertencias y 0 errores; formato de Booking.Api y Booking.Tests correcto.
+- Decisiones relacionadas: `T18-D03`, `T18-D05`, `T18-D06`.
+- Gaps relacionados: `T18-G01`, `T18-G02`.
+- Restricción conservada: `Broker:AzureServiceBus:Enabled = false`; no se abrió la subscription compartida.
+
 ## 11. Prompts previstos
 
 Estos prompts son guías. Se registrarán como historial real solamente cuando se ejecuten.
@@ -560,12 +573,6 @@ Estos prompts son guías. Se registrarán como historial real solamente cuando s
 > Revisá el estado actual de #15 y confirmá el contrato que consumirá Booking. Identificá campos, metadata, MessageId y CorrelationId. No inventes un contrato paralelo. Confirmá también la duración acordada para la retención.
 
 Resultado esperado (`T18-F02-R02`): contrato final trazable, eliminación de `T18-G01` y duración configurable aceptada.
-
-### T18-F06-P01 - Settlement y observabilidad
-
-> Implementá y justificá Complete, DeadLetter y reintento para cada resultado. Agregá logs estructurados de inicio y fin con RequestId y CorrelationId sin registrar datos sensibles.
-
-Resultado esperado (`T18-F06-R01`): ninguna ruta pierde mensajes silenciosamente y el flujo puede reconstruirse desde logs.
 
 ### T18-F07-P01 - Verificar aceptación
 
@@ -595,10 +602,10 @@ Resultado esperado (`T18-F09-R01`): PR revisable, sin secretos y con criterios d
 | `T18-V04` | `VALIDADO` | El repositorio crea una solicitud nueva como `Retained`. |
 | `T18-V05` | `VALIDADO` | Un RequestId duplicado devuelve la reserva existente y conserva una única fila. |
 | `T18-V06` | `VALIDADO` | Dos processors simultáneos dejaron una reserva `Retained` y otra `Rejected/SeatTaken` en PostgreSQL. |
-| `T18-V07` | `PENDIENTE` | Error transitorio no completa el mensaje. |
-| `T18-V08` | `PENDIENTE` | Mensaje inválido va a dead-letter. |
+| `T18-V07` | `VALIDADO LOCAL` | Una excepción se propaga sin completar ni enviar a dead-letter; el processor podrá reintentarla. |
+| `T18-V08` | `VALIDADO LOCAL` | Cada error determinístico del mapper produce una única decisión de dead-letter. |
 | `T18-V09` | `PENDIENTE` | El modelo provisorio se reemplaza por #15 sin cambiar Business/Data. |
-| `T18-V10` | `PARCIAL` | Business devuelve `RequestConflict` para otro EventId o SeatId; el envío a dead-letter se validará en F06. |
+| `T18-V10` | `VALIDADO LOCAL` | `RequestConflict` e `InvalidRequest` producen dead-letter con códigos estables. |
 
 ## 13. Guion de defensa oral
 

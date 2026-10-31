@@ -152,3 +152,54 @@ Implementar `T18-F04` en Booking.Business para convertir automáticamente `SeatT
 ### Próximo cambio permitido por la especificación
 
 Implementar `T18-F06`: relacionar cada resultado de mapper y Business con `Complete`, `DeadLetter` o reintento, y agregar observabilidad local con `RequestId` y `CorrelationId` sin registrar secretos.
+
+## 2026-10-31 - Settlement y observabilidad local, F06
+
+### Alcance
+
+- Se registró y aplicó la matriz de settlement validada por Alejandro.
+- Se implementaron decisiones de `Complete` y `DeadLetter` independientes del SDK para permitir pruebas sin Azure.
+- Las excepciones de procesamiento y settlement se registran con metadatos seguros y se propagan para reintento.
+- El consumer continúa deshabilitado y no se abrió ninguna conexión al broker compartido.
+
+### Comportamiento implementado
+
+| Resultado | Acción |
+|---|---|
+| `Retained`, `Duplicate`, `SeatTaken` | `Complete`. |
+| Error determinístico del mapper | `DeadLetter` con el mismo código. |
+| `RequestConflict` | `DeadLetter` con `RequestPayloadConflict`. |
+| `InvalidRequest` | `DeadLetter` con su código o fallback `InvalidRequest`. |
+| Excepción de Business/Data | Sin settlement; log seguro y propagación. |
+| Falla de `Complete` o `DeadLetter` | Sin acción alternativa; log seguro y propagación. |
+
+### Diseño
+
+- `ReservationRequestSettlementDecider` transforma resultados en una decisión pura y testeable.
+- `ReservationRequestMessageProcessor` coordina handler, settlement y logs.
+- `IReservationRequestMessageSettlement` desacopla las pruebas del SDK.
+- `AzureServiceBusReservationRequestMessageSettlement` adapta `ProcessMessageEventArgs`.
+- Los logs incluyen MessageId, RequestId cuando existe, CorrelationId, DeliveryCount, outcome, error code, acción y tipo de excepción.
+- No se registran body, connection string, tokens, propiedades completas ni excepciones crudas.
+
+### Evidencia
+
+| Validación | Resultado |
+|---|---|
+| Suite Booking.Tests | 48 correctas, 0 fallidas, 0 omitidas. |
+| Outcomes exitosos | `Retained`, `Duplicate` y `SeatTaken` resuelven `Complete`. |
+| Mapper | Sus siete códigos determinísticos resuelven `DeadLetter`. |
+| Business inválido | `RequestConflict` e `InvalidRequest` resuelven `DeadLetter`. |
+| Reintento | Las excepciones se propagan sin otra acción de settlement. |
+| Logs | RequestId y CorrelationId presentes cuando corresponde; body y excepción cruda ausentes. |
+| Compilación | Solución completa con 0 advertencias y 0 errores. |
+| Formato | Booking.Api y Booking.Tests sin cambios requeridos. |
+| Broker | Sin conexión; `Enabled` continúa en `false`. |
+
+### Estado
+
+`PARCIAL` para `T18-F06`: la matriz y el comportamiento están verificados localmente. Falta una prueba controlada contra Azure Service Bus después de autorizar la activación.
+
+### Próximo cambio permitido por la especificación
+
+Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el flujo completo sin poner en riesgo mensajes de la subscription compartida.

@@ -142,16 +142,29 @@ PostgreSQL / autoridad de concurrencia
 
 ## 9. Settlement
 
-La regla funcional de persistir antes de confirmar y la necesidad de tolerar fallos parciales están validadas. El mecanismo concreto de settlement del SDK permanece `PROVISORIO` hasta implementarlo y verificarlo en F06.
+Estado: matriz `VALIDADA` por el responsable el 2026-10-31. Las llamadas concretas al SDK continúan bajo `T18-G02` hasta verificarlas localmente en F06.
 
-| Resultado | Acción prevista |
-|---|---|
-| Reserva creada | `Complete`. |
-| Duplicado compatible | `Complete`. |
-| `SeatTaken` persistido | `Complete`. |
-| RequestId conflictivo | `DeadLetter`. |
-| JSON o identificadores inválidos | `DeadLetter`. |
-| Error transitorio de infraestructura | No completar; permitir reintento. |
+La regla funcional es persistir antes de confirmar y propagar las excepciones de procesamiento. Con `AutoCompleteMessages = false`, una excepción no asentada queda disponible para el mecanismo de reintento del processor.
+
+| Origen | Resultado | Acción validada |
+|---|---|---|
+| Mapper | Cualquier error determinístico de `ReservationRequestMappingErrorCodes` | `DeadLetter` con el mismo código y una descripción genérica. |
+| Business | `Retained`, `Duplicate` o `SeatTaken` | `Complete`. |
+| Business | `RequestConflict` | `DeadLetter` con `RequestPayloadConflict`. |
+| Business | `InvalidRequest` | `DeadLetter` con su `ErrorCode` o `InvalidRequest`. |
+| Business/Data | Excepción o cancelación | No ejecutar settlement; registrar metadatos seguros y propagar para reintento. |
+| SDK | Falla `Complete` o `DeadLetter` | No intentar una segunda acción; registrar el tipo de excepción y propagar. |
+
+Logs permitidos: `MessageId`, `RequestId` después de un mapeo válido, `CorrelationId`, `DeliveryCount`, outcome, error code, acción de settlement y tipo de excepción. No se registran body, connection string, claves, tokens, propiedades completas ni mensajes crudos de excepción. Booking conserva un `CorrelationId` ausente como `null`; no genera uno mientras #15 siga pendiente.
+
+Pruebas locales requeridas sin broker:
+
+1. Cada error determinístico del mapper produce un único `DeadLetter` y no invoca Business.
+2. `Retained`, `Duplicate` y `SeatTaken` producen un único `Complete`.
+3. `RequestConflict` e `InvalidRequest` producen un único `DeadLetter` con código estable.
+4. Una excepción de procesamiento o settlement se propaga y no dispara otra acción.
+5. Los logs contienen RequestId y CorrelationId cuando corresponden y nunca el body o secretos.
+6. El consumer permanece deshabilitado y ninguna prueba abre una conexión a Azure Service Bus.
 
 ### T18-G02 - Diseño técnico provisorio de F05 y F06
 
@@ -191,8 +204,8 @@ Límite de fases:
 | `T18-RQ-03..07` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorTests.cs` | Agregado | 14 casos unitarios aprobados. |
 | `T18-RQ-03,04` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorIntegrationTests.cs` | Agregado | Concurrencia real aprobada. |
 | `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/` | Agregado | Recepción, mapeo y delegación verificados localmente; conexión real pendiente. |
-| `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/` | Agregado parcialmente | Settlement y observabilidad pendientes de F06. |
-| `T18-RQ-01,02` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración y ciclo de vida deshabilitado verificados. |
+| `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/` | Agregado | Settlement y observabilidad verificados localmente; prueba real pendiente. |
+| `T18-RQ-01,02,08,09` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración, settlement, propagación de excepciones y logs seguros verificados. |
 
 ## 11. Escenarios de aceptación
 
@@ -224,4 +237,6 @@ Límite de fases:
 - `dotnet build TpFinal.sln --no-restore /p:UseSharedCompilation=false`: 0 advertencias y 0 errores.
 - Resultado acumulado después de F05: 30 pruebas correctas, 0 fallidas y 0 omitidas.
 - F05 agregó pruebas del contrato `T18-G01`, coherencia de `MessageId`, delegación al processor scoped, validación de opciones y ciclo de vida con el consumer deshabilitado.
+- Resultado acumulado después de F06: 48 pruebas correctas, 0 fallidas y 0 omitidas.
+- F06 verificó todos los errores del mapper, outcomes de Business, propagación de excepciones, fallos de settlement y ausencia de body o excepción cruda en logs.
 - No se abrió una conexión a Azure Service Bus ni se consumió la subscription compartida.
