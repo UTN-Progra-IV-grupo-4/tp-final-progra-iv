@@ -28,6 +28,9 @@ public sealed class ReservationRequestConsumerHostedServiceTests
         var handler = new ReservationRequestMessageHandler(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
             new ReservationRequestMapper());
+        var messageProcessor = new ReservationRequestMessageProcessor(
+            handler,
+            NullLogger<ReservationRequestMessageProcessor>.Instance);
         var consumer = new AzureServiceBusReservationRequestConsumer(
             Options.Create(new BrokerOptions
             {
@@ -37,7 +40,7 @@ public sealed class ReservationRequestConsumerHostedServiceTests
                     Enabled = false
                 }
             }),
-            handler,
+            messageProcessor,
             NullLogger<AzureServiceBusReservationRequestConsumer>.Instance);
 
         await consumer.StartAsync(CancellationToken.None);
