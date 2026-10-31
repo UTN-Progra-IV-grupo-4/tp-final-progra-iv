@@ -49,6 +49,31 @@ public sealed class ExpireRetainedReservationsTests
         Assert.Empty(repository.ExpirationAttempts);
     }
 
+    [Fact]
+    public async Task ExecuteAsync_ProcessesOnlyExpiredRetainedReservations()
+    {
+        var repository = new StubReservationRepository();
+        var retainedNotExpired = CreateReservation(ReservationStatus.Retained, UtcNow.AddTicks(1));
+        var retainedExpired = CreateReservation(ReservationStatus.Retained, UtcNow);
+        var confirmed = CreateReservation(ReservationStatus.Confirmed, UtcNow.AddMinutes(-1));
+        var rejected = CreateReservation(ReservationStatus.Rejected, null);
+        repository.AddExpiredReservation(retainedNotExpired);
+        repository.AddExpiredReservation(retainedExpired);
+        repository.AddExpiredReservation(confirmed);
+        repository.AddExpiredReservation(rejected);
+        var useCase = new ExpireRetainedReservations(
+            repository,
+            new FixedTimeProvider(UtcNow));
+
+        var result = await useCase.ExecuteAsync();
+
+        Assert.Equal(1, result.ProcessedCount);
+        Assert.Equal(new[] { retainedExpired.Id }, result.ReservationIds);
+        var expirationAttempt = Assert.Single(repository.ExpirationAttempts);
+        Assert.Equal(retainedExpired.Id, expirationAttempt.ReservationId);
+        Assert.Equal(UtcNow, expirationAttempt.Now);
+    }
+
     private static Reservation CreateExpiredReservation() =>
         new()
         {
@@ -57,5 +82,20 @@ public sealed class ExpireRetainedReservationsTests
             SeatId = Guid.NewGuid(),
             Status = ReservationStatus.Retained,
             ExpiresAt = UtcNow
+        };
+
+    private static Reservation CreateReservation(
+        ReservationStatus status,
+        DateTimeOffset? expiresAt) =>
+        new()
+        {
+            Id = Guid.NewGuid(),
+            EventId = Guid.NewGuid(),
+            SeatId = Guid.NewGuid(),
+            Status = status,
+            RejectionReason = status == ReservationStatus.Rejected
+                ? ReservationRejectionReason.SeatTaken
+                : null,
+            ExpiresAt = expiresAt
         };
 }
