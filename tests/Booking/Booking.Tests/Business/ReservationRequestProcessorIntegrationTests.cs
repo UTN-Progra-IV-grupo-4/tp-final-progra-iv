@@ -32,7 +32,7 @@ public sealed class ReservationRequestProcessorIntegrationTests(PostgreSqlFixtur
                 repository,
                 Options.Create(new ReservationProcessingOptions
                 {
-                    RetentionDuration = TimeSpan.FromMinutes(5)
+                    RetentionDuration = TimeSpan.FromMinutes(10)
                 }),
                 new FixedTimeProvider(UtcNow));
 
@@ -59,7 +59,7 @@ public sealed class ReservationRequestProcessorIntegrationTests(PostgreSqlFixtur
         var retainedReservation = Assert.Single(
             reservations,
             reservation => reservation.Status == ReservationStatus.Retained);
-        Assert.Equal(UtcNow.AddMinutes(5), retainedReservation.ExpiresAt);
+        Assert.Equal(UtcNow.AddMinutes(10), retainedReservation.ExpiresAt);
         Assert.Null(retainedReservation.RejectionReason);
 
         var rejectedReservation = Assert.Single(

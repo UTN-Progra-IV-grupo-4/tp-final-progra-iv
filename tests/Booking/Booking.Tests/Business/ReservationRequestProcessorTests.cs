@@ -11,7 +11,7 @@ public sealed class ReservationRequestProcessorTests
     private static readonly DateTimeOffset UtcNow =
         new(2026, 10, 31, 15, 0, 0, TimeSpan.Zero);
 
-    private static readonly TimeSpan RetentionDuration = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RetentionDuration = TimeSpan.FromMinutes(10);
 
     [Theory]
     [InlineData("RequestId", ReservationProcessingErrorCodes.RequestIdRequired)]
