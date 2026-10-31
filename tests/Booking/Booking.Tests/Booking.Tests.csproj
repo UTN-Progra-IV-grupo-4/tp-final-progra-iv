@@ -19,6 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Booking\Booking.Api\Booking.Api.csproj" />
     <ProjectReference Include="..\..\..\src\Booking\Booking.Business\Booking.Business.csproj" />
     <ProjectReference Include="..\..\..\src\Booking\Booking.Data\Booking.Data.csproj" />
   </ItemGroup>
