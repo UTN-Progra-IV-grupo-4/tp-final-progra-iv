@@ -27,6 +27,23 @@ public sealed class StubReservationRepository : IReservationRepository
         return Task.FromResult(results.Dequeue());
     }
 
+    public Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<Reservation>>([]);
+    }
+
+    public Task<bool> TryExpireAsync(
+        Guid reservationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(false);
+    }
+
     private static Reservation Clone(Reservation reservation) =>
         new()
         {

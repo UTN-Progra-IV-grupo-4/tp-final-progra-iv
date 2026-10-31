@@ -51,6 +51,35 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
         }
     }
 
+    public async Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default) =>
+        await dbContext.Reservations
+            .AsNoTracking()
+            .Where(reservation =>
+                reservation.Status == ReservationStatus.Retained &&
+                reservation.ExpiresAt <= now)
+            .ToListAsync(cancellationToken);
+
+    public async Task<bool> TryExpireAsync(
+        Guid reservationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        var updatedCount = await dbContext.Reservations
+            .Where(reservation =>
+                reservation.Id == reservationId &&
+                reservation.Status == ReservationStatus.Retained &&
+                reservation.ExpiresAt <= now)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    reservation => reservation.Status,
+                    ReservationStatus.Expired),
+                cancellationToken);
+
+        return updatedCount > 0;
+    }
+
     private static PostgresException? GetUniqueViolation(DbUpdateException exception) =>
         exception.InnerException is PostgresException postgresException &&
         postgresException.SqlState == PostgresErrorCodes.UniqueViolation
