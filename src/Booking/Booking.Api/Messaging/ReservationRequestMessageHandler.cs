@@ -5,7 +5,7 @@ namespace Booking.Api.Messaging;
 
 internal sealed class ReservationRequestMessageHandler(
     IServiceScopeFactory scopeFactory,
-    ReservationRequestMapper mapper)
+    ReservationRequestMapper mapper) : IReservationRequestMessageHandler
 {
     public async Task<ReservationRequestHandlingResult> HandleAsync(
         ReservationRequestDelivery delivery,

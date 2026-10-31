@@ -4,4 +4,5 @@ internal sealed record ReservationRequestDelivery(
     BinaryData Body,
     string? MessageId,
     string? CorrelationId,
-    string? Subject);
+    string? Subject,
+    int DeliveryCount = 0);

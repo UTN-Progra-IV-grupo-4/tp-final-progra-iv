@@ -17,7 +17,8 @@ internal static class BookingMessagingServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddSingleton<ReservationRequestMapper>();
-        services.AddSingleton<ReservationRequestMessageHandler>();
+        services.AddSingleton<IReservationRequestMessageHandler, ReservationRequestMessageHandler>();
+        services.AddSingleton<ReservationRequestMessageProcessor>();
         services.AddSingleton<IReservationRequestConsumer, AzureServiceBusReservationRequestConsumer>();
         services.AddHostedService<ReservationRequestConsumerHostedService>();
 

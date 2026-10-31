@@ -5,7 +5,7 @@ namespace Booking.Api.Messaging;
 
 internal sealed class AzureServiceBusReservationRequestConsumer(
     IOptions<BrokerOptions> brokerOptions,
-    ReservationRequestMessageHandler handler,
+    ReservationRequestMessageProcessor messageProcessor,
     ILogger<AzureServiceBusReservationRequestConsumer> logger) :
     IReservationRequestConsumer,
     IAsyncDisposable
@@ -19,7 +19,7 @@ internal sealed class AzureServiceBusReservationRequestConsumer(
         if (!options.AzureServiceBus.Enabled)
         {
             logger.LogInformation(
-                "Azure Service Bus reservation consumer is disabled. F06 must be completed before enabling it.");
+                "Azure Service Bus reservation consumer is disabled by configuration.");
             return;
         }
 
@@ -43,9 +43,17 @@ internal sealed class AzureServiceBusReservationRequestConsumer(
             processor.ProcessErrorAsync += ProcessErrorAsync;
 
             await processor.StartProcessingAsync(cancellationToken);
+
+            logger.LogInformation(
+                "Azure Service Bus reservation consumer started. Topic: {TopicName}; Subscription: {SubscriptionName}.",
+                options.AzureServiceBus.TopicName,
+                options.AzureServiceBus.SubscriptionName);
         }
-        catch
+        catch (Exception exception)
         {
+            logger.LogError(
+                "Azure Service Bus reservation consumer failed to start. ExceptionType: {ExceptionType}.",
+                exception.GetType().FullName);
             await DisposeResourcesAsync();
             throw;
         }
@@ -66,6 +74,8 @@ internal sealed class AzureServiceBusReservationRequestConsumer(
         {
             await DisposeResourcesAsync();
         }
+
+        logger.LogInformation("Azure Service Bus reservation consumer stopped.");
     }
 
     public ValueTask DisposeAsync() => DisposeResourcesAsync();
@@ -76,21 +86,23 @@ internal sealed class AzureServiceBusReservationRequestConsumer(
             args.Message.Body,
             args.Message.MessageId,
             args.Message.CorrelationId,
-            args.Message.Subject);
+            args.Message.Subject,
+            args.Message.DeliveryCount);
+        var settlement = new AzureServiceBusReservationRequestMessageSettlement(args);
 
-        await handler.HandleAsync(delivery, args.CancellationToken);
-
-        // F05 intentionally does not settle messages. Complete, DeadLetter and retry
-        // decisions are implemented and verified in F06 before enabling this consumer.
+        await messageProcessor.ProcessAsync(
+            delivery,
+            settlement,
+            args.CancellationToken);
     }
 
     private Task ProcessErrorAsync(ProcessErrorEventArgs args)
     {
         logger.LogError(
-            args.Exception,
-            "Azure Service Bus processor failed. Source: {ErrorSource}; entity: {EntityPath}.",
+            "Azure Service Bus processor failed. Source: {ErrorSource}; Entity: {EntityPath}; ExceptionType: {ExceptionType}.",
             args.ErrorSource,
-            args.EntityPath);
+            args.EntityPath,
+            args.Exception.GetType().FullName);
 
         return Task.CompletedTask;
     }
