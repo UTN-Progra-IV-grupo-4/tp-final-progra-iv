@@ -203,3 +203,37 @@ Implementar `T18-F06`: relacionar cada resultado de mapper y Business con `Compl
 ### Próximo cambio permitido por la especificación
 
 Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el flujo completo sin poner en riesgo mensajes de la subscription compartida.
+
+## 2026-10-31 - Auditoría de avance, especificaciones y protocolo
+
+### Alcance
+
+- Se contrastaron `SPEC.md`, la hoja de ruta y este registro con el código, las pruebas y los commits reales de F03 a F06.
+- Se verificó que la documentación continúa siendo un registro personal y que `T18-G01`, `T18-G02` y `T18-B02` permanecen abiertos.
+- No se modificó código productivo, pruebas ni configuración y no se inició F07.
+
+### Resultado
+
+| Área | Resultado de la auditoría |
+|---|---|
+| F03 y F04 | Implementación y evidencia completas; estado `VALIDADO`. |
+| F05 | Implementado y verificado localmente; permanece `PARCIAL` por el contrato provisorio y la falta de recepción real controlada. |
+| F06 | Implementado y verificado localmente; permanece `PARCIAL` hasta una prueba controlada con Azure Service Bus. |
+| F07 | Existe evidencia local reutilizable, pero la fase de aceptación y el smoke test no comenzaron; estado documental `PENDIENTE`. |
+| F08 | La documentación personal está avanzada, pero faltan la guía final de ejecución y la preparación de defensa; estado `PARCIAL`. |
+| F09 | Revisión final contra `develop` y preparación del PR pendientes. |
+
+### Evidencia revalidada
+
+| Validación | Resultado |
+|---|---|
+| Rama | Limpia y sincronizada con `origin/18-booking-consumir-solicitudes-de-reserva`. |
+| Suite Booking.Tests | 48 correctas, 0 fallidas, 0 omitidas. |
+| Commits F05 y F06 | Implementación, pruebas y documentación separados. |
+| Configuración | Consumer deshabilitado; valores sensibles ausentes de la configuración versionada. |
+| Secretos | No se detectaron connection strings ni claves de Azure Service Bus en archivos versionados. |
+| Broker | No se abrió la subscription compartida. |
+
+### Estado
+
+`VALIDADO`: Alejandro aprobó el diff documental el 2026-10-31. Las correcciones quedaron limitadas a la especificación personal, el registro de implementación y la hoja de ruta, sin iniciar F07 ni modificar código productivo.

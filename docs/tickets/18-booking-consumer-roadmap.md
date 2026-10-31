@@ -247,8 +247,8 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
 | `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente; conexión real diferida hasta una prueba controlada y autorizada. |
 | `T18-F06` Settlement y observabilidad local | `PARCIAL` | Completar, reintentar o dead-letter y generar logs locales. | Implementado y verificado localmente; evidencia contra Azure real pendiente. |
-| `T18-F07` Pruebas | `PENDIENTE` | Verificar casos funcionales, duplicados y concurrencia real. | Dos solicitudes simultáneas producen una retenida y una rechazada. |
-| `T18-F08` Documentación y defensa | `PENDIENTE` | Documentar ejecución, diagramas y argumentos. | Otro integrante puede ejecutar y explicar la solución. |
+| `T18-F07` Pruebas | `PENDIENTE` | Ejecutar la aceptación formal y el smoke test controlado; reutilizar la evidencia local producida por F03 a F06. | Dos solicitudes simultáneas producen una retenida y una rechazada y el flujo del broker queda demostrado sin afectar la subscription compartida. |
+| `T18-F08` Documentación y defensa | `PARCIAL` | Completar la guía de ejecución, diagramas y argumentos a partir de la documentación personal existente. | Otro integrante puede ejecutar y explicar la solución. |
 | `T18-F09` Cierre | `PENDIENTE` | Revisar diff, compilar y preparar PR. | Checklist completo y PR hacia `develop`. |
 
 ## 9. Plan de cambios por raíz
@@ -311,6 +311,12 @@ tp-final-progra-iv/
 │               ├── ReservationRequestMappingResult.cs
 │               ├── ReservationRequestMessageHandler.cs
 │               ├── ReservationRequestMapper.cs
+│               ├── IReservationRequestMessageHandler.cs
+│               ├── IReservationRequestMessageSettlement.cs
+│               ├── AzureServiceBusReservationRequestMessageSettlement.cs
+│               ├── ReservationRequestMessageProcessor.cs
+│               ├── ReservationRequestSettlementDecision.cs
+│               ├── ReservationRequestSettlementDecider.cs
 │               └── [A][P][R] ProvisionalReservationRequestMessage.cs
 │
 ├── tests/
@@ -325,6 +331,8 @@ tp-final-progra-iv/
 │           ├── Messaging/BrokerOptionsTests.cs
 │           ├── Messaging/ReservationRequestConsumerHostedServiceTests.cs
 │           ├── Messaging/ReservationRequestMessageHandlerTests.cs
+│           ├── Messaging/ReservationRequestMessageProcessorTests.cs
+│           ├── Messaging/ReservationRequestSettlementDeciderTests.cs
 │           └── Messaging/[P] ReservationRequestMapperTests.cs
 │
 ├── [N] README.md
@@ -340,7 +348,7 @@ Estado: `EN_CURSO`.
 
 - Agrega la plantilla y esta hoja de ruta.
 - No modifica código ejecutable.
-- Commit sugerido: `docs(booking): add ticket 18 development roadmap`.
+- Commit sugerido: `docs(booking): registrar hoja de ruta del ticket 18`.
 
 ### T18-C02 - Persistencia race-safe
 
@@ -352,7 +360,7 @@ Estado: `VALIDADO`.
 - Distingue las restricciones `PK_reservations` e `IX_reservations_event_id_seat_id` al manejar el código PostgreSQL `23505`.
 - Después de una escritura fallida, limpia el estado de seguimiento de EF Core o utiliza un contexto nuevo antes de persistir `Rejected/SeatTaken`.
 - No modifica la entidad ni la migración: el esquema de #17 ya contiene las restricciones necesarias.
-- Commit sugerido: `feat(booking): handle concurrent reservation creation`.
+- Commit realizado: `feat(booking): agregar persistencia concurrente de reservas`.
 
 ### T18-C03 - Caso de uso de Business
 
@@ -362,18 +370,18 @@ Estado: `VALIDADO`.
 - Business depende de la abstracción de Data, no del broker.
 - Usa UTC y una duración configurable para calcular `ExpiresAt`.
 - Distingue un duplicado compatible de un `RequestId` reutilizado con otro evento o asiento.
-- Commit sugerido: `feat(booking): process reservation requests`.
+- Commit realizado: `feat(booking): procesar solicitudes de reserva`.
 
 ### T18-C04 - Adaptador de Azure Service Bus
 
-Estado: `PARCIAL`. F05 está implementado y verificado localmente; F06 y la prueba contra el broker continúan pendientes.
+Estado: `PARCIAL`. F05 y F06 están implementados y verificados localmente; la prueba controlada contra el broker y el reemplazo de `T18-G01` continúan pendientes.
 
 - Agrega el SDK y la configuración del broker en Booking.Api.
 - Agrega el ciclo de vida provisorio del consumer según `T18-G02`.
 - Usa temporalmente `T18-G01` y concentra el gap en el mensaje provisorio y su mapper.
 - Recibe, deserializa, mapea y delega el mensaje a Business.
-- Deja para F06 la validación completa de `Complete`, `DeadLetter`, reintento y logs locales. No se ejecuta contra la subscription compartida antes de cerrar esas rutas.
-- Commit sugerido: `feat(booking): consume reservation requests`.
+- F06 implementa y verifica localmente `Complete`, `DeadLetter`, reintento por propagación y logs seguros. Esto no autoriza por sí solo una conexión a la subscription compartida.
+- Commits realizados: `feat(booking): integrar consumer provisorio de Azure Service Bus` y `feat(booking): implementar settlement y observabilidad local`.
 
 ### T18-C05 - Reemplazo por el contrato de #15
 
@@ -387,11 +395,11 @@ Estado: `BLOQUEADO`.
 
 ### T18-C06 - Pruebas, documentación y cierre
 
-Estado: `PENDIENTE`.
+Estado: `EN_CURSO`. Las pruebas y la documentación local de F03 a F06 están registradas; F07, la defensa final y el cierre continúan pendientes.
 
 - Completa pruebas unitarias, de integración y smoke test controlado con Azure Service Bus.
 - Actualiza la documentación personal, la hoja de ruta, la evidencia y la defensa oral.
-- Commit sugerido: `test(booking): cover duplicate and concurrent requests`, seguido de `docs(booking): document reservation consumer flow`.
+- Commits realizados hasta F06: `test(booking): verificar mapeo y delegación del consumer`, `test(booking): verificar decisiones de settlement`, `docs(booking): registrar implementación local de F05` y `docs(booking): registrar validación e implementación de F06`.
 
 ### Orden de dependencias
 
@@ -419,7 +427,28 @@ Booking.Data nunca referencia Business o Api.
 Booking.Business nunca referencia Api, Contracts o Azure Service Bus.
 ```
 
-## 10. Historial real de prompts y respuestas clave
+## 10. Protocolo personal de validación por bloques
+
+Este protocolo organiza el trabajo personal del responsable y no constituye una metodología aprobada por el equipo.
+
+1. **Delimitar el bloque:** identificar fase, objetivo, alcance, fuentes oficiales, dependencias y elementos fuera de alcance.
+2. **Clasificar definiciones:** marcar cada decisión como `VALIDADO`, `CURSO-VALIDADO` o `PROVISORIO`; registrar bloqueos y condición de cierre de cada gap.
+3. **Presentar el comportamiento:** describir qué se agregará o modificará, el orden de ejecución y la evidencia esperada antes de cambiar código cuando exista una decisión pendiente.
+4. **Obtener visto bueno:** no convertir una definición pendiente en regla personal ni iniciar un bloque condicionado hasta recibir validación expresa del responsable.
+5. **Implementar con alcance aislado:** respetar capas, mantener los gaps provisorios en su adaptador y no asumir responsabilidades de otros tickets.
+6. **Verificar:** compilar, ejecutar las pruebas proporcionales al cambio, revisar secretos y confirmar que no se utilizaron recursos compartidos sin autorización.
+7. **Separar cambios:** preparar implementación, pruebas y documentación en commits independientes cuando el bloque lo permita, con descripciones en español.
+8. **Registrar evidencia:** incorporar solamente prompts realmente ejecutados, su contexto, respuesta clave, archivos y resultados verificables. Un prompt en ejecución queda `EN_VALIDACION` hasta revisar su resultado.
+9. **Cerrar el bloque:** informar el estado real, los pendientes y el siguiente paso recomendado con su prompt sugerido. Los prompts sugeridos permanecen fuera del historial hasta ser utilizados.
+
+Restricciones permanentes para T18:
+
+- No registrar secretos ni cuerpos de mensajes sensibles.
+- No presentar SDD, `T18-G01` o `T18-G02` como decisiones del equipo.
+- No activar el consumer contra la subscription compartida sin una prueba controlada y autorización explícita.
+- No cerrar F05, F06 ni el ticket mientras falten la evidencia real requerida y las dependencias oficiales.
+
+## 11. Historial real de prompts y respuestas clave
 
 ### T18-F00-P01 - Validar la nueva PC
 
@@ -607,7 +636,39 @@ Booking.Business nunca referencia Api, Contracts o Azure Service Bus.
 - Gaps relacionados: `T18-G01`.
 - Cambios relacionados: documentación personal; sin código ni F07.
 
-## 11. Prompts previstos
+### T18-F06-P02 - Separar implementación, pruebas y documentación de F06
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Prepará los tres commits de F06 separando implementación, pruebas y documentación. Verificá el contenido staged antes de cada commit, no implementes F07 y no realices push. Luego validemos el avance del ticket 18 y revisemos qué cambios de #22, #19, #15, #13 y #18 afectan nuestra especificación y desarrollo”.
+- Respuesta clave (`T18-F06-R02`): se verificó el contenido staged y se crearon `e8ce692` para implementación, `9e84f4c` para pruebas y `2538b7d` para documentación, sin iniciar F07. La revisión cruzada posterior quedó registrada en `T18-F02-P02`.
+- Validaciones relacionadas: `T18-V01`, `T18-V07`, `T18-V08`, `T18-V10`.
+
+### T18-F08-P04 - Revisar y persistir la alineación documental
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Revisá el diff documental de la actualización de los tickets #13, #15, #18, #19 y #22. Confirmá que no modifica código, que mantiene T18-G01 y T18-B02 abiertos y que distingue correctamente reglas oficiales de detalles provisorios. Si está consistente, creá el commit `docs(booking): alinear especificación con tickets relacionados` sin realizar push”.
+- Respuesta clave (`T18-F08-R04`): el diff quedó limitado a `SPEC.md` y la hoja de ruta, conservó los bloqueos y gaps indicados y se creó el commit `79f457b` sin cambios de código.
+- Cambios relacionados: documentación personal; sin F07.
+
+### T18-F08-P05 - Auditar avance, especificaciones y protocolo
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Validemos el avance y contenido en specs y protocolo utilizado”.
+- Contexto: contrastar documentación, código, pruebas y commits sin modificar archivos.
+- Respuesta clave (`T18-F08-R05`): se confirmó la separación de commits, la ausencia de secretos, el consumer deshabilitado y 48 pruebas correctas. Se detectaron estados y referencias desactualizados en F06, C04, C06, F07 y F08, archivos de F06 ausentes del árbol, commits sugeridos en inglés y la falta de una descripción explícita del protocolo personal.
+- Validaciones relacionadas: `T18-V01`, `T18-V02`, `T18-V04`, `T18-V05`, `T18-V06`, `T18-V07`, `T18-V08`, `T18-V10`.
+
+### T18-F08-P06 - Aplicar correcciones documentales de la auditoría
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Actualizá únicamente la especificación personal, el registro de implementación y la hoja de ruta del ticket #18 con el resultado de la auditoría validada. Corregí los estados desactualizados de F06, C04, C06, F07 y F08; actualizá el mapa de archivos y evidencias; registrá los prompts reales pendientes y documentá explícitamente el protocolo personal de validación por bloques. Conservá T18-G01, T18-G02 y T18-B02 abiertos, mantené F05 y F06 como parciales hasta la prueba controlada con Azure Service Bus, y no modifiques código productivo ni inicies F07. Reemplazá los commits sugeridos en inglés por descripciones en español. Antes de crear un commit, mostrame el diff documental para validarlo”.
+- Respuesta clave (`T18-F08-R06`): se corrigieron los estados y referencias desactualizados, se incorporaron los archivos y evidencias de F06, se registraron los prompts faltantes y se documentó el protocolo personal. Alejandro aprobó el diff limitado a los tres documentos personales antes del commit; no se modificó código ni se inició F07.
+
+## 12. Prompts previstos
 
 Estos prompts son guías. Se registrarán como historial real solamente cuando se ejecuten.
 
@@ -623,11 +684,11 @@ Resultado esperado (`T18-F02-R03`): contrato final trazable, eliminación de `T1
 
 Resultado esperado (`T18-F07-R01`): evidencia reproducible de una reserva retenida y otra rechazada con SeatTaken, sin duplicados.
 
-### T18-F08-P04 - Preparar defensa oral
+### T18-F08-P07 - Preparar defensa oral
 
 > Generá la documentación final del ticket 18 con diagrama, instrucciones de ejecución, decisiones, tradeoffs y un simulacro de preguntas de defensa. Relacioná la solución con N-Layer, mensajería, concurrencia e idempotencia vistas en clase.
 
-Resultado esperado (`T18-F08-R04`): explicación breve y demostración ejecutable por otro integrante.
+Resultado esperado (`T18-F08-R07`): explicación breve y demostración ejecutable por otro integrante.
 
 ### T18-F09-P01 - Revisión final
 
@@ -635,7 +696,7 @@ Resultado esperado (`T18-F08-R04`): explicación breve y demostración ejecutabl
 
 Resultado esperado (`T18-F09-R01`): PR revisable, sin secretos y con criterios de aceptación demostrados.
 
-## 12. Validaciones
+## 13. Validaciones
 
 | ID | Estado | Evidencia |
 |---|---|---|
@@ -650,7 +711,7 @@ Resultado esperado (`T18-F09-R01`): PR revisable, sin secretos y con criterios d
 | `T18-V09` | `PENDIENTE` | El modelo provisorio se reemplaza por #15 sin cambiar Business/Data. |
 | `T18-V10` | `VALIDADO LOCAL` | `RequestConflict` e `InvalidRequest` producen dead-letter con códigos estables. |
 
-## 13. Guion de defensa oral
+## 14. Guion de defensa oral
 
 La explicación debe seguir siempre este orden:
 
@@ -663,7 +724,7 @@ La explicación debe seguir siempre este orden:
 7. Consistencia eventual: Availability responde antes de que Booking termine.
 8. Evidencia: pruebas concurrentes, logs y estado final de la base.
 
-## 14. Definición de terminado de T18
+## 15. Definición de terminado de T18
 
 - Consumer compatible con múltiples réplicas.
 - Contrato compartido de #15 utilizado sin duplicación.

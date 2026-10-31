@@ -162,7 +162,7 @@ PostgreSQL / autoridad de concurrencia
 
 ## 9. Settlement
 
-Estado: matriz `VALIDADA` por el responsable el 2026-10-31. Las llamadas concretas al SDK continúan bajo `T18-G02` hasta verificarlas localmente en F06.
+Estado: matriz `VALIDADA` por el responsable el 2026-10-31 e implementación `VERIFICADA LOCALMENTE` en F06. Las decisiones concretas del SDK continúan clasificadas bajo `T18-G02` porque todavía no fueron acordadas por el equipo ni verificadas contra Azure Service Bus real.
 
 La regla funcional es persistir antes de confirmar y propagar las excepciones de procesamiento. Con `AutoCompleteMessages = false`, una excepción no asentada queda disponible para el mecanismo de reintento del processor.
 
@@ -210,9 +210,9 @@ Límite de fases:
 
 | Requisitos | Archivo | Cambio | Estado |
 |---|---|---|---|
-| `T18-RQ-03..06` | `src/Booking/Booking.Data/Repositories/IReservationRepository.cs` | Agregado | Compila; falta integración. |
-| `T18-RQ-03..06` | `src/Booking/Booking.Data/Repositories/ReservationInsertResult.cs` | Agregado | Compila; falta integración. |
-| `T18-RQ-03..06` | `src/Booking/Booking.Data/Repositories/ReservationRepository.cs` | Agregado | Compila; falta integración. |
+| `T18-RQ-03..06` | `src/Booking/Booking.Data/Repositories/IReservationRepository.cs` | Agregado | Verificado contra PostgreSQL 16. |
+| `T18-RQ-03..06` | `src/Booking/Booking.Data/Repositories/ReservationInsertResult.cs` | Agregado | Verificado contra PostgreSQL 16. |
+| `T18-RQ-03..06` | `src/Booking/Booking.Data/Repositories/ReservationRepository.cs` | Agregado | Verificado contra PostgreSQL 16, incluidas colisiones concurrentes. |
 | `T18-RQ-03..06` | `src/Booking/Booking.Data/BookingDataServiceCollectionExtensions.cs` | Modificado | Compila. |
 | `T18-RQ-03..05` | `tests/Booking/Booking.Tests/Data/PostgreSqlFixture.cs` | Agregado | Verificado con PostgreSQL 16. |
 | `T18-RQ-03..05` | `tests/Booking/Booking.Tests/Data/ReservationRepositoryIntegrationTests.cs` | Agregado | 4/4 pruebas aprobadas. |
@@ -223,9 +223,9 @@ Límite de fases:
 | `T18-RQ-07` | `src/Booking/Booking.Business/Reservations/ReservationProcessingOptions.cs` | Agregado | Verificado con valor de prueba. |
 | `T18-RQ-03..07` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorTests.cs` | Agregado | 14 casos unitarios aprobados. |
 | `T18-RQ-03,04` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorIntegrationTests.cs` | Agregado | Concurrencia real aprobada. |
-| `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/` | Agregado | Recepción, mapeo y delegación verificados localmente; conexión real pendiente. |
-| `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/` | Agregado | Settlement y observabilidad verificados localmente; prueba real pendiente. |
-| `T18-RQ-01,02,08,09` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración, settlement, propagación de excepciones y logs seguros verificados. |
+| `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/AzureServiceBusReservationRequestConsumer.cs`, `ReservationRequestConsumerHostedService.cs`, `ReservationRequestMapper.cs` y `ReservationRequestMessageHandler.cs` | Agregado | Ciclo de vida, recepción, mapeo y delegación verificados localmente; conexión real pendiente. |
+| `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/ReservationRequestMessageProcessor.cs`, `ReservationRequestSettlementDecider.cs` y `AzureServiceBusReservationRequestMessageSettlement.cs` | Agregado | Settlement, propagación y observabilidad verificados localmente; prueba real pendiente. |
+| `T18-RQ-01,02,08,09` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración, ciclo de vida, settlement, propagación de excepciones y logs seguros verificados dentro de las 48 pruebas de Booking.Tests. |
 
 ## 11. Escenarios de aceptación
 
@@ -242,7 +242,7 @@ Límite de fases:
 | ID | Pendiente | Impacto | Condición de cierre |
 |---|---|---|---|
 | `T18-G01` | Clase y documentación del contrato definitivo de #15 todavía ausentes de `develop`. | Impide cerrar la integración aunque las reglas semánticas básicas ya estén definidas. | Reemplazar modelo y mapper provisorios y validar con un mensaje producido desde el contrato compartido. |
-| `T18-G02` | Detalles técnicos del consumer y settlement. | Permite avanzar, pero no debe presentarse como decisión del equipo. | Implementar, probar y registrar la alternativa final; mantener provisorio lo que siga sin acuerdo. |
+| `T18-G02` | Detalles técnicos del consumer y settlement. | La alternativa está implementada y verificada localmente, pero no debe presentarse como decisión del equipo. | Validar en una prueba controlada con Azure Service Bus y mantener provisorio lo que siga sin acuerdo. |
 | `T18-B02` | Duración de retención todavía “A definir” en #18. | Impide calcular el `ExpiresAt` final. | Acordar valor y configurarlo sin hardcodearlo. |
 | `T18-E01` | Docker/PostgreSQL para pruebas. | Cerrado: Docker Desktop y Testcontainers operativos. | Cumplida el 2026-10-31. |
 
