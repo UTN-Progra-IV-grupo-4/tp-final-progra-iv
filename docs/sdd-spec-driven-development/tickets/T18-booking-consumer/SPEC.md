@@ -8,11 +8,23 @@
 |---|---|
 | Issue | [#18 - Booking: consumir solicitudes de reserva](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/18) |
 | Responsable | Alejandro Galarza |
-| Estado SDD | `IMPLEMENTING` con contrato de entrada `PROVISIONAL` |
+| Estado SDD | `IMPLEMENTING` con contrato de entrada `PROVISORIO` |
 | Componentes | Booking.Api, Booking.Business y Booking.Data |
 | Arquitectura | N-Layer, dominio anémico |
 
 Hoja de ruta relacionada: [`docs/tickets/18-booking-consumer-roadmap.md`](../../../tickets/18-booking-consumer-roadmap.md).
+
+### Clasificación de las definiciones
+
+Esta especificación personal distingue el origen y el grado de cierre de cada decisión:
+
+| Estado | Uso |
+|---|---|
+| `VALIDADO` | Está definido por el TP, un issue, una decisión cerrada del equipo o una validación expresa del responsable. |
+| `CURSO-VALIDADO` | Tiene fundamento en las clases 01 a 12 y fue validado expresamente por el responsable antes de incorporarlo. |
+| `PROVISORIO` | No está cerrado por el TP, los tickets o el equipo. Debe permanecer aislado e indicar su condición de reemplazo. |
+
+El material de la cursada permite justificar conceptos y decisiones de diseño, pero no convierte en definitivos los detalles concretos del SDK de Azure Service Bus.
 
 ## 2. Objetivo observable
 
@@ -66,9 +78,21 @@ Booking ejecuta `Complete` solamente después de guardar `Retained`, `Rejected/S
 
 Después de una violación única `23505`, las entidades fallidas dejan de estar tracked antes de consultar o realizar otra escritura con el mismo contexto.
 
+### T18-BR-07 - Réplicas sin coordinación en memoria
+
+Las réplicas procesan solicitudes de forma independiente. No comparten locks en memoria ni estado estático; PostgreSQL, el índice único y la idempotencia arbitran los accesos concurrentes.
+
+Estado: `CURSO-VALIDADO`. Fundamento: réplicas y base compartida en C02-P16; concurrencia y condiciones de carrera en C03-P10 y C03-P11.
+
+### T18-BR-08 - Trazabilidad local
+
+El procesamiento registra inicio, resultado y error con `RequestId` y, cuando esté disponible, `CorrelationId`. Los logs no deben incluir connection strings ni otros secretos.
+
+Estado: `CURSO-VALIDADO`. Fundamento: logging, metadatos y propagación de identificadores en C09-P04, C09-P05 y C09-P06. La auditoría distribuida completa permanece fuera de alcance y pertenece a #24.
+
 ## 6. Contrato de entrada provisorio
 
-Estado: `PROVISIONAL`, identificado como `T18-G01`.
+Estado: `PROVISORIO`, identificado como `T18-G01`.
 
 ```json
 {
@@ -88,7 +112,13 @@ Metadata provisional:
 
 El modelo vive solamente en `Booking.Api`. No se agrega a `src/Contracts`. Cuando #15 publique el contrato definitivo se reemplazarán el tipo de entrada y el mapper, sin modificar Business ni Data.
 
+También son provisorias las reglas exactas de deserialización y validación del mapper. Como base de desarrollo se rechazarán JSON inválidos, identificadores vacíos y diferencias entre `MessageId` y `requestId`; la validación de `Subject` queda pendiente del contrato de #15.
+
 ## 7. Diseño por capas
+
+Estado: `CURSO-VALIDADO` por el responsable el 2026-10-31.
+
+Fundamento: separación lógica N-Layer en C02-P09 y C06-P11; adaptadores y dependencias hacia las reglas interiores en C06-P13. Este fundamento valida la ubicación de responsabilidades, no los tipos concretos utilizados por el SDK.
 
 ```text
 Azure Service Bus
@@ -112,6 +142,8 @@ PostgreSQL / autoridad de concurrencia
 
 ## 9. Settlement
 
+La regla funcional de persistir antes de confirmar y la necesidad de tolerar fallos parciales están validadas. El mecanismo concreto de settlement del SDK permanece `PROVISORIO` hasta implementarlo y verificarlo en F06.
+
 | Resultado | Acción prevista |
 |---|---|
 | Reserva creada | `Complete`. |
@@ -120,6 +152,26 @@ PostgreSQL / autoridad de concurrencia
 | RequestId conflictivo | `DeadLetter`. |
 | JSON o identificadores inválidos | `DeadLetter`. |
 | Error transitorio de infraestructura | No completar; permitir reintento. |
+
+### T18-G02 - Diseño técnico provisorio de F05 y F06
+
+Las siguientes decisiones permiten construir y probar el adaptador sin presentarlas como definiciones del TP, la cursada o el equipo:
+
+| Área | Definición provisoria | Condición de cierre o reemplazo |
+|---|---|---|
+| Ciclo de vida | Ejecutar el consumer como `IHostedService` o `BackgroundService` dentro de `Booking.Api`. | Verificar inicio, detención y manejo de cancelación; registrar la alternativa finalmente implementada. |
+| Settlement | Configurar procesamiento manual, inicialmente con `AutoCompleteMessages = false`. | Validar en F06 cada ruta de `Complete`, `DeadLetter` y reintento. |
+| Scope | Crear un scope de dependencias por mensaje y resolver allí Business y Data; no compartir un `DbContext` entre mensajes. | Verificar mediante pruebas concurrentes y revisión de lifetimes. |
+| Configuración | Leer `Broker:Provider`, `Broker:AzureServiceBus:ConnectionString`, `Broker:AzureServiceBus:TopicName` y `Broker:AzureServiceBus:SubscriptionName`. La duración continúa bajo opciones de procesamiento de reservas. | Ajustar si el equipo define otra estructura; connection string únicamente en User Secrets o variables de entorno. |
+| Mapper | Deserializar `T18-G01`, validar JSON e identificadores y mapear al comando interno estable. | Reemplazar modelo y mapper cuando #15 publique el contrato definitivo. |
+| Ajustes del SDK | No fijar todavía valores definitivos de concurrencia, prefetch, renovación de lock ni límites de reintento. | Definirlos con evidencia de pruebas o decisión del equipo. |
+| Prueba compartida | No consumir la subscription compartida en una prueba manual sin autorización explícita y control del mensaje utilizado. | Ejecutar un smoke test coordinado o utilizar un recurso aislado. |
+
+Límite de fases:
+
+- F05 configura el adaptador, recibe, deserializa, mapea y delega a Business.
+- F06 cierra las decisiones de settlement, retries, dead-letter y observabilidad local.
+- No se ejecutará el consumer contra la subscription compartida hasta que las rutas de F06 estén implementadas.
 
 ## 10. Mapa especificación-código
 
@@ -156,6 +208,7 @@ PostgreSQL / autoridad de concurrencia
 | ID | Pendiente | Impacto | Condición de cierre |
 |---|---|---|---|
 | `T18-G01` | Contrato definitivo de #15. | Impide cerrar la integración. | Reemplazar mensaje provisorio y validar con mensaje real. |
+| `T18-G02` | Detalles técnicos del consumer y settlement. | Permite avanzar, pero no debe presentarse como decisión del equipo. | Implementar, probar y registrar la alternativa final; mantener provisorio lo que siga sin acuerdo. |
 | `T18-B02` | Duración de retención. | Impide calcular el `ExpiresAt` final. | Acordar valor y configurarlo. |
 | `T18-E01` | Docker/PostgreSQL para pruebas. | Cerrado: Docker Desktop y Testcontainers operativos. | Cumplida el 2026-10-31. |
 

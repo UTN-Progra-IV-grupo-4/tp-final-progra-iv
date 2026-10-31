@@ -21,6 +21,16 @@ En caso de contradicción se utiliza este orden:
 4. Decisiones técnicas cerradas y README del repositorio.
 5. Material conceptual de la cursada.
 
+Clasificación utilizada en esta documentación personal:
+
+| Estado | Criterio |
+|---|---|
+| `VALIDADO` | Definido por una fuente oficial o decisión cerrada. |
+| `CURSO-VALIDADO` | Relacionado con las clases 01 a 12 y aprobado expresamente por Alejandro antes de incorporarlo. |
+| `PROVISORIO` | No definido todavía por el TP, los tickets o el equipo; debe quedar aislado y con condición de reemplazo. |
+
+El material de la cursada justifica conceptos y decisiones de diseño. Los detalles concretos del SDK, configuración y operación del broker no se atribuyen a las clases si estas no los especifican.
+
 Dependencias relacionadas:
 
 - [#4 - Decisión de message broker](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4).
@@ -54,8 +64,8 @@ Fuera del alcance de T18:
 - Azure Service Bus está configurado mediante User Secrets.
 - `Reservation.Id` es la clave primaria y representa el id de solicitud.
 - Existe un índice único parcial sobre `(EventId, SeatId)` para `Retained` y `Confirmed`.
-- La rama todavía no contiene cambios propios respecto de `develop`.
-- No existe consumer, caso de uso, repositorio específico ni proyecto de pruebas.
+- La rama contiene F03 y F04 implementados, verificados, commiteados y publicados en el remoto.
+- Todavía no existe el consumer de Azure Service Bus; el caso de uso, el repositorio específico y el proyecto de pruebas ya están implementados.
 
 ## 5. Decisiones técnicas
 
@@ -88,6 +98,23 @@ El broker es un adaptador de entrada. `Booking.Business` contiene el caso de uso
 Estado: `VALIDADO` como regla de diseño.
 
 Un mensaje repetido es idempotente solamente cuando conserva el mismo `RequestId`, `EventId` y `SeatId`. Si el mismo `RequestId` reaparece con otro evento o asiento, se trata como conflicto de identidad y no como duplicado exitoso; el consumer debe registrarlo y enviarlo a dead-letter.
+
+### T18-D06 - Trazabilidad local del procesamiento
+
+Estado: `CURSO-VALIDADO` por el responsable el 2026-10-31.
+
+El consumer registra inicio, resultado y error con `RequestId` y, cuando exista, `CorrelationId`, sin incluir secretos. La auditoría distribuida completa permanece en #24.
+
+### Alineación validada con las clases 01 a 12
+
+| Decisión | Fundamento de cursada | Alcance validado |
+|---|---|---|
+| Capas y adaptador de entrada (`T18-D04`) | C02-P09, C06-P11 y C06-P13. | Azure Service Bus y el mapper quedan en Api; Business conserva el caso de uso y Data la persistencia. |
+| Réplicas y concurrencia (`T18-D01`) | C02-P16, C03-P10 y C03-P11. | No usar locks en memoria ni estado estático; PostgreSQL e idempotencia arbitran la competencia. |
+| Resiliencia (`T18-D03`) | C03-P06 y C03-P08. | Un fallo transitorio no debe producir pérdida silenciosa; la confirmación ocurre después de obtener un resultado persistido. |
+| Observabilidad local (`T18-D06`) | C09-P04, C09-P05 y C09-P06. | Logs con nivel e identificadores de seguimiento, sin secretos. |
+
+Estas cuatro relaciones fueron validadas expresamente por Alejandro el 2026-10-31. El material no define `IHostedService`, scopes de DI, `AutoCompleteMessages`, reglas exactas del mapper ni parámetros del SDK; esas decisiones permanecen provisorias.
 
 ## 6. Bloqueos y definiciones pendientes
 
@@ -159,6 +186,24 @@ Condición de cierre del gap:
 4. Las pruebas de deserialización usan un mensaje producido con el contrato definitivo.
 5. `T18-B01` y `T18-G01` pasan a `VALIDADO` y se registra la decisión final.
 
+### T18-G02 - Diseño técnico provisorio del consumer
+
+Estado: `PROVISORIO`.
+
+Este gap reúne decisiones necesarias para implementar F05 y F06 que todavía no fueron definidas por el TP, los tickets o el equipo:
+
+| Área | Definición provisoria | Cierre esperado |
+|---|---|---|
+| Ciclo de vida | Consumer alojado mediante `IHostedService` o `BackgroundService` en Booking.Api. | Verificar inicio, detención y cancelación; documentar el tipo finalmente usado. |
+| Settlement | Procesamiento manual, inicialmente con `AutoCompleteMessages = false`. | Probar en F06 `Complete`, `DeadLetter` y reintento para cada resultado. |
+| Dependencias | Un scope por mensaje; Business y Data se resuelven dentro del scope y no se comparte `DbContext`. | Confirmar lifetimes y concurrencia con pruebas. |
+| Configuración | Usar `Broker:Provider` y `Broker:AzureServiceBus:{ConnectionString,TopicName,SubscriptionName}`; nunca versionar la connection string. | Ajustar si el equipo adopta otra estructura. |
+| Mapper | Validar JSON, identificadores y coherencia entre `MessageId` y `requestId`; no validar todavía el nombre exacto de `Subject`. | Reemplazar las reglas dependientes del mensaje cuando cierre #15. |
+| Ajustes del SDK | Concurrencia, prefetch, renovación de lock y límites de reintento sin valores definitivos. | Definir con pruebas o acuerdo del equipo. |
+| Smoke test | No consumir la subscription compartida sin autorización explícita y control del mensaje de prueba. | Coordinar la prueba o usar un recurso aislado. |
+
+F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y delegación a Business. F06 cubre settlement, retries, dead-letter y observabilidad local. El consumer no se ejecutará contra la subscription compartida antes de completar F06.
+
 ## 8. Fases de desarrollo
 
 | Fase | Estado | Objetivo | Criterio de salida |
@@ -168,7 +213,7 @@ Condición de cierre del gap:
 | `T18-F02` Contratos y configuración | `PROVISORIO` | Avanzar con `T18-G01` y confirmar contrato #15 y duración de retención. | El gap queda aislado; al cerrar, se usa el contrato definitivo sin afectar Business/Data. |
 | `T18-F03` Data | `VALIDADO` | Implementar consultas e inserciones race-safe. | Distingue creado, duplicado y asiento ocupado. |
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
-| `T18-F05` Consumer | `PENDIENTE` | Integrar Azure Service Bus en Booking.Api. | Consume tópico/suscripción y mapea el contrato. |
+| `T18-F05` Consumer | `PENDIENTE` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Inicia, recibe, mapea el contrato provisorio y delega a Business sin crear un contrato compartido paralelo. |
 | `T18-F06` Settlement y observabilidad local | `PENDIENTE` | Completar, reintentar o dead-letter y generar logs locales. | Cada resultado tiene acción y trazabilidad explícitas; la auditoría distribuida completa queda en #24. |
 | `T18-F07` Pruebas | `PENDIENTE` | Verificar casos funcionales, duplicados y concurrencia real. | Dos solicitudes simultáneas producen una retenida y una rechazada. |
 | `T18-F08` Documentación y defensa | `PENDIENTE` | Documentar ejecución, diagramas y argumentos. | Otro integrante puede ejecutar y explicar la solución. |
@@ -283,10 +328,10 @@ Estado: `VALIDADO`.
 Estado: `PENDIENTE`.
 
 - Agrega el SDK y la configuración del broker en Booking.Api.
-- Agrega el consumer como hosted service.
+- Agrega el ciclo de vida provisorio del consumer según `T18-G02`.
 - Usa temporalmente `T18-G01` y concentra el gap en el mensaje provisorio y su mapper.
-- Implementa `Complete`, `DeadLetter` y reintento según el resultado.
-- Limita los logs de T18 a la operación local y a la propagación del correlation id; la cadena de auditoría entre todos los servicios pertenece a #24.
+- Recibe, deserializa, mapea y delega el mensaje a Business.
+- Deja para F06 la validación completa de `Complete`, `DeadLetter`, reintento y logs locales. No se ejecuta contra la subscription compartida antes de cerrar esas rutas.
 - Commit sugerido: `feat(booking): consume reservation requests`.
 
 ### T18-C05 - Reemplazo por el contrato de #15
@@ -475,6 +520,17 @@ Booking.Business nunca referencia Api, Contracts o Azure Service Bus.
 - Cambios relacionados: `T18-C01`, `T18-C06`.
 - Validaciones relacionadas: `T18-V01`, `T18-V02`, `T18-V04`, `T18-V05`, `T18-V06`, `T18-V10`.
 
+### T18-F05-P01 - Clasificar especificaciones antes del consumer
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Actualizá la especificación personal y la hoja de ruta del ticket #18 aplicando la clasificación acordada: registrá las definiciones respaldadas por las clases 01–12 que validé y marcá expresamente como provisorias las decisiones técnicas todavía no definidas por el TP, los tickets o el equipo. Corregí el prompt de F05 para utilizar temporalmente T18-G01 mientras #15 siga pendiente. No modifiques código productivo”.
+- Contexto: antes de implementar F05 se revisaron las definiciones faltantes y se separó el fundamento conceptual de la cursada de los detalles concretos del SDK y del contrato pendiente de #15.
+- Respuesta clave (`T18-F05-R01`): se registraron como validadas las decisiones de capas, réplicas, resiliencia y observabilidad; se creó `T18-G02` para las decisiones técnicas provisorias; se delimitó F05 respecto de F06 y se corrigió el prompt de implementación para usar `T18-G01` mientras #15 siga pendiente.
+- Decisiones relacionadas: `T18-D01`, `T18-D03`, `T18-D04`, `T18-D06`.
+- Gaps relacionados: `T18-G01`, `T18-G02`.
+- Cambios relacionados: documentación personal; sin cambios en código productivo.
+
 ## 11. Prompts previstos
 
 Estos prompts son guías. Se registrarán como historial real solamente cuando se ejecuten.
@@ -485,11 +541,11 @@ Estos prompts son guías. Se registrarán como historial real solamente cuando s
 
 Resultado esperado (`T18-F02-R02`): contrato final trazable, eliminación de `T18-G01` y duración configurable aceptada.
 
-### T18-F05-P01 - Integrar el consumer
+### T18-F05-P02 - Integrar el consumer
 
-> Implementá el consumer de Azure Service Bus en Booking.Api usando las opciones ya guardadas en User Secrets y el contrato compartido de #15. Configurá el tópico grupo4-booking-topic y la suscripción booking sin exponer secretos.
+> Implementá F05 en Booking.Api usando las opciones ya guardadas en User Secrets y el modelo privado provisorio `T18-G01` mientras #15 siga pendiente. Leé topic y subscription desde configuración, iniciá y detené el adaptador, deserializá, mapeá y delegá el comando a Business. Mantené el tipo provisorio y su mapper aislados en Booking.Api, no agregues un contrato paralelo a `src/Contracts` y tratá las decisiones concretas del SDK conforme a `T18-G02` sin presentarlas como acuerdos del equipo. No ejecutes el consumer contra la subscription compartida antes de completar F06.
 
-Resultado esperado (`T18-F05-R01`): hosted service que inicia y se detiene correctamente y delega el mensaje a Business.
+Resultado esperado (`T18-F05-R02`): adaptador que inicia y se detiene correctamente, consume la configuración, transforma `T18-G01` y delega a Business, con el gap limitado al borde de Booking.Api.
 
 ### T18-F06-P01 - Settlement y observabilidad
 
