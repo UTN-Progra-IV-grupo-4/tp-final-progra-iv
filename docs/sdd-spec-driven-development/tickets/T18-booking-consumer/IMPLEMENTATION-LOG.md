@@ -287,3 +287,35 @@ Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el f
 ### Estado
 
 `VERIFICADO_LOCALMENTE`: la decisión y el comportamiento están comprobados; los cambios permanecen sin commit para revisión separada de implementación, pruebas y documentación.
+
+## 2026-10-31 - Validación controlada de Azure Service Bus, F07
+
+### Preparación
+
+- El equipo confirmó una ventana sin otros consumidores sobre `grupo4-booking-topic/booking`.
+- PostgreSQL se mantuvo local y la migración de Booking estaba al día.
+- Se utilizó una única instancia de `Booking.Api`, activada temporalmente mediante variables de entorno.
+- `T18-G01` continuó siendo el contrato privado provisorio; no se modificó `Business` ni `Data`.
+- Se utilizó el emisor auxiliar no productivo `tools/F07Sender`, sin secretos versionados y sin receiver.
+
+### Resultados observados
+
+| Caso | Resultado | Settlement/evidencia |
+|---|---|---|
+| Solicitud nueva | `Retained` | `Complete`; fila insertada en PostgreSQL local. |
+| Duplicado compatible | `Duplicate` | `Complete`; PostgreSQL reportó `23505` sobre la clave primaria. |
+| `RequestId` conflictivo | `RequestPayloadConflict` | `DeadLetter`; mismo RequestId con otro evento/asiento. |
+| JSON inválido | `InvalidJson` | `DeadLetter`; no se intentó persistir. |
+| Asiento ocupado | `SeatTaken` | `Complete`; `23505` sobre `IX_reservations_event_id_seat_id`. |
+| Excepción transitoria | Reintento | PostgreSQL inaccesible: `DeliveryCount` 1, 2 y 3; al restaurar la conexión, entrega 4 y `Retained`/`Complete`. |
+
+### Observabilidad y limpieza
+
+- Los logs conservaron `MessageId`, `RequestId`, `CorrelationId`, `DeliveryCount`, outcome y acción de settlement.
+- No se registraron cuerpos, connection strings ni secretos.
+- La instancia del consumer fue detenida al finalizar la ventana; no quedó ningún proceso consumiendo la subscription.
+- La suite final volvió a quedar en 48 pruebas correctas, 0 fallidas y 0 omitidas.
+
+### Estado
+
+`VALIDADO` para `T18-F07` en una ventana controlada de una sola instancia. F05 y F06 permanecen `PARCIALES` por `T18-G01` y `T18-G02`; F08 y F09 continúan pendientes.

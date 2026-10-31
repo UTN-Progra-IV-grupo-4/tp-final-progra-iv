@@ -15,7 +15,7 @@ La solución separa el transporte, el caso de uso y la persistencia:
 
 Los duplicados se controlan mediante `RequestId`, las competencias por asiento mediante un índice único parcial y el mensaje se completa solamente después de persistir un resultado. Los errores determinísticos van a dead-letter y las excepciones se propagan para permitir reintentos.
 
-F03 a F06 están implementadas y verificadas localmente con 48 pruebas. El equipo definió una retención de 10 minutos. La integración continúa abierta porque faltan el contrato definitivo de #15 y una prueba controlada con Azure Service Bus real.
+F03 a F07 están implementadas y verificadas localmente con 48 pruebas y una ventana controlada con Azure Service Bus. El equipo definió una retención de 10 minutos. La integración continúa abierta por el contrato definitivo de #15 y la documentación/cierre final.
 
 ## 2. Problema que resuelve
 
@@ -241,7 +241,7 @@ La suite Booking.Tests tiene 48 pruebas correctas, 0 fallidas y 0 omitidas. Cubr
 - propagación de excepciones;
 - logs seguros.
 
-La solución compiló con 0 errores y 0 advertencias. No se abrió la subscription compartida.
+La solución compiló con 0 errores y 0 advertencias. La subscription compartida solo se abrió durante la ventana coordinada de F07 y el consumer quedó detenido al finalizar.
 
 ## 12. Pendientes obligatorios
 
@@ -255,7 +255,7 @@ El equipo definió 10 minutos. Booking lo configura como `ReservationProcessing:
 
 ### Azure Service Bus real
 
-F05 y F06 están implementadas y verificadas localmente, pero falta demostrar recepción real, competing consumers, Complete, DeadLetter, reentrega y comportamiento del lock sobre un recurso controlado.
+F07 demostró recepción real, `Complete`, `DeadLetter` y reentrega sobre `grupo4-booking-topic/booking` durante una ventana coordinada. La prueba utilizó una única instancia y PostgreSQL local; no demuestra competing consumers entre dos réplicas ni reemplaza el contrato definitivo de #15.
 
 ## 13. Preguntas probables y respuestas breves
 
@@ -329,10 +329,10 @@ Dura 10 minutos por decisión del equipo. La duración permanece configurable y 
 
 ### ¿Cómo se demostró el comportamiento?
 
-Con 48 pruebas, incluidas pruebas contra PostgreSQL real. La interacción con Azure Service Bus real continúa pendiente.
+Con 48 pruebas y una ventana controlada de Azure Service Bus. Se observaron `Retained`, `Duplicate`, `SeatTaken`, `DeadLetter` por errores determinísticos y reentrega por excepción. La validación de múltiples réplicas y el contrato definitivo de #15 continúan pendientes.
 
 ## 14. Cierre sugerido
 
 La implementación local resuelve concurrencia, idempotencia y procesamiento seguro. PostgreSQL garantiza una sola reserva activa por asiento, RequestId garantiza idempotencia y el settlement ocurre después de persistir.
 
-El ticket todavía no está cerrado: falta integrar el contrato oficial de #15 y ejecutar una prueba controlada con Azure Service Bus real.
+El ticket todavía no está cerrado: falta integrar el contrato oficial de #15, completar F08 y ejecutar F09.

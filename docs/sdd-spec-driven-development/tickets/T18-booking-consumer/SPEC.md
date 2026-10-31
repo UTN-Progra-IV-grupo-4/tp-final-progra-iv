@@ -43,15 +43,15 @@ Una réplica de Booking consume una solicitud de un solo asiento. Si el asiento 
 
 | ID | Requisito | Estado | Evidencia prevista |
 |---|---|---|---|
-| `T18-RQ-01` | Consumir mensajes desde el topic y subscription configurados. | Pendiente | Prueba controlada con Azure Service Bus. |
+| `T18-RQ-01` | Consumir mensajes desde el topic y subscription configurados. | Validado en prueba controlada | F07 recibió mensajes reales desde `grupo4-booking-topic/booking`. |
 | `T18-RQ-02` | Permitir múltiples réplicas mediante competing consumers. | Pendiente | Dos procesos sobre la misma subscription. |
 | `T18-RQ-03` | Crear `Retained` cuando el asiento esté libre. | Verificado en Business y Data | Prueba de integración PostgreSQL aprobada. |
 | `T18-RQ-04` | Persistir `Rejected/SeatTaken` cuando el asiento esté ocupado. | Verificado en Business y Data | Prueba concurrente Business+PostgreSQL aprobada. |
 | `T18-RQ-05` | Tratar una reentrega compatible como duplicado exitoso. | Verificado en Business | Prueba unitaria de idempotencia aprobada. |
 | `T18-RQ-06` | Rechazar el mismo RequestId con otro evento o asiento. | Verificado localmente en Business y settlement | Pruebas unitarias de conflicto y dead-letter aprobadas. |
 | `T18-RQ-07` | Calcular `ExpiresAt` en UTC con una duración configurable de 10 minutos. | Validado | Configuración `00:10:00` y prueba con TimeProvider fijo. |
-| `T18-RQ-08` | Completar el mensaje solamente después de persistir el resultado. | Verificado localmente | Pruebas unitarias de settlement aprobadas; falta prueba real. |
-| `T18-RQ-09` | Reintentar errores transitorios y enviar mensajes inválidos a dead-letter. | Verificado localmente | Pruebas de propagación y dead-letter aprobadas; falta prueba real. |
+| `T18-RQ-08` | Completar el mensaje solamente después de persistir el resultado. | Validado en prueba controlada | F07 observó `Retained`, `Duplicate` y `SeatTaken` con `Complete`. |
+| `T18-RQ-09` | Reintentar errores transitorios y enviar mensajes inválidos a dead-letter. | Validado en prueba controlada | F07 observó `InvalidJson`/conflicto en dead-letter y reentrega por excepción. |
 
 ## 5. Reglas e invariantes
 
@@ -184,7 +184,7 @@ Pruebas locales requeridas sin broker:
 3. `RequestConflict` e `InvalidRequest` producen un único `DeadLetter` con código estable.
 4. Una excepción de procesamiento o settlement se propaga y no dispara otra acción.
 5. Los logs contienen RequestId y CorrelationId cuando corresponden y nunca el body o secretos.
-6. El consumer permanece deshabilitado y ninguna prueba abre una conexión a Azure Service Bus.
+6. Estas pruebas unitarias locales mantienen el consumer deshabilitado y no abren una conexión a Azure Service Bus; F07 se ejecutó aparte en una ventana controlada y autorizada.
 
 ### T18-G02 - Diseño técnico provisorio de F05 y F06
 
@@ -204,7 +204,7 @@ Límite de fases:
 
 - F05 configura el adaptador, recibe, deserializa, mapea y delega a Business.
 - F06 cierra las decisiones de settlement, retries, dead-letter y observabilidad local.
-- El consumer permanece deshabilitado hasta una prueba controlada y autorizada; completar F06 localmente no autoriza por sí solo el consumo de la subscription compartida.
+- El consumer permanece deshabilitado por defecto. Una prueba contra la subscription compartida requiere autorización, ventana coordinada y una única instancia controlada.
 
 ## 10. Mapa especificación-código
 
@@ -242,7 +242,7 @@ Límite de fases:
 | ID | Pendiente | Impacto | Condición de cierre |
 |---|---|---|---|
 | `T18-G01` | Clase y documentación del contrato definitivo de #15 todavía ausentes de `develop`. | Impide cerrar la integración aunque las reglas semánticas básicas ya estén definidas. | Reemplazar modelo y mapper provisorios y validar con un mensaje producido desde el contrato compartido. |
-| `T18-G02` | Detalles técnicos del consumer y settlement. | La alternativa está implementada y verificada localmente, pero no debe presentarse como decisión del equipo. | Validar en una prueba controlada con Azure Service Bus y mantener provisorio lo que siga sin acuerdo. |
+| `T18-G02` | Detalles técnicos del consumer y settlement. | La alternativa fue validada en una ventana controlada, pero las decisiones de SDK no se presentan como acuerdos generales. | Mantener provisorio lo que no esté definido por el equipo y revisar el contrato definitivo de #15. |
 | `T18-B02` | Duración de retención. | Cerrado: el equipo definió 10 minutos el 2026-10-31. | Configurada como `ReservationProcessing:RetentionDuration = 00:10:00` y verificada en UTC. |
 | `T18-E01` | Docker/PostgreSQL para pruebas. | Cerrado: Docker Desktop y Testcontainers operativos. | Cumplida el 2026-10-31. |
 
@@ -260,4 +260,6 @@ Límite de fases:
 - Resultado acumulado después de F06: 48 pruebas correctas, 0 fallidas y 0 omitidas.
 - F06 verificó todos los errores del mapper, outcomes de Business, propagación de excepciones, fallos de settlement y ausencia de body o excepción cruda en logs.
 - `T18-B02` quedó cerrado con una retención configurable de 10 minutos; las pruebas verifican `ExpiresAt = UtcNow + 00:10:00`.
-- No se abrió una conexión a Azure Service Bus ni se consumió la subscription compartida.
+- F07 abrió una única instancia durante una ventana autorizada sobre `grupo4-booking-topic/booking`, con PostgreSQL local.
+- Evidencia F07: nueva solicitud `Retained`, duplicado `Duplicate`, conflicto `RequestPayloadConflict`, inválido `InvalidJson`, asiento ocupado `SeatTaken` y reintento con `DeliveryCount` 1–3 antes de completar con `DeliveryCount=4`.
+- El consumer fue detenido al finalizar la ventana y no quedó ninguna instancia activa.

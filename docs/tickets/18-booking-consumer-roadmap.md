@@ -71,8 +71,8 @@ Fuera del alcance de T18:
 - Azure Service Bus está configurado mediante User Secrets.
 - `Reservation.Id` es la clave primaria y representa el id de solicitud.
 - Existe un índice único parcial sobre `(EventId, SeatId)` para `Retained` y `Confirmed`.
-- La rama contiene F03 a F06 implementados y verificados localmente; F05 y F06 continúan parciales hasta probarse con Azure Service Bus.
-- El consumer permanece deshabilitado por configuración y no se utilizó la subscription compartida.
+- La rama contiene F03 a F07 implementados y verificados localmente; F05 y F06 continúan parciales por los contratos y decisiones provisorias.
+- El consumer permanece deshabilitado por configuración; F07 utilizó la subscription compartida únicamente durante una ventana autorizada.
 
 ## 5. Decisiones técnicas
 
@@ -234,7 +234,7 @@ Este gap reúne decisiones necesarias para implementar F05 y F06 que todavía no
 | Ajustes del SDK | Concurrencia, prefetch, renovación de lock y límites de reintento sin valores definitivos. | Definir con pruebas o acuerdo del equipo. |
 | Smoke test | No consumir la subscription compartida sin autorización explícita y control del mensaje de prueba. | Coordinar la prueba o usar un recurso aislado. |
 
-F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y delegación a Business. F06 cubre settlement, retries, dead-letter y observabilidad local. Aunque F06 ya está verificado localmente, el consumer permanece deshabilitado hasta una prueba controlada y autorizada.
+F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y delegación a Business. F06 cubre settlement, retries, dead-letter y observabilidad local. F07 confirmó esas rutas contra Azure durante una ventana autorizada; el consumer permanece deshabilitado por defecto.
 
 ## 8. Fases de desarrollo
 
@@ -245,10 +245,10 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 | `T18-F02` Contratos y configuración | `PROVISORIO` | Avanzar con `T18-G01`, integrar el contrato de #15 cuando exista y usar la retención validada de 10 minutos. | `T18-B02` cerrado; el gap del contrato queda aislado y debe reemplazarse sin afectar Business/Data. |
 | `T18-F03` Data | `VALIDADO` | Implementar consultas e inserciones race-safe. | Distingue creado, duplicado y asiento ocupado. |
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
-| `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente; conexión real diferida hasta una prueba controlada y autorizada. |
-| `T18-F06` Settlement y observabilidad local | `PARCIAL` | Completar, reintentar o dead-letter y generar logs locales. | Implementado y verificado localmente; evidencia contra Azure real pendiente. |
-| `T18-F07` Pruebas | `PENDIENTE` | Ejecutar la aceptación formal y el smoke test controlado; reutilizar la evidencia local producida por F03 a F06. | Dos solicitudes simultáneas producen una retenida y una rechazada y el flujo del broker queda demostrado sin afectar la subscription compartida. |
-| `T18-F08` Documentación y defensa | `PARCIAL` | Completar la guía de ejecución, diagramas y argumentos a partir de la documentación personal existente. | Otro integrante puede ejecutar y explicar la solución. |
+| `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente y en una ventana controlada; el contrato definitivo de #15 sigue pendiente. |
+| `T18-F06` Settlement y observabilidad local | `PARCIAL` | Completar, reintentar o dead-letter y generar logs locales. | Matriz verificada localmente y contra Azure; las decisiones técnicas siguen bajo `T18-G02`. |
+| `T18-F07` Pruebas | `VALIDADO` | Ejecutar la aceptación formal y el smoke test controlado; reutilizar la evidencia local producida por F03 a F06. | Casos reales de éxito, duplicado, conflicto, inválido, asiento ocupado y reintento documentados. |
+| `T18-F08` Documentación y defensa | `PARCIAL` | Completar la guía de ejecución, diagramas y argumentos a partir de la documentación personal existente. | Registrar evidencia de F07 y preparar la documentación final. |
 | `T18-F09` Cierre | `PENDIENTE` | Revisar diff, compilar y preparar PR. | Checklist completo y PR hacia `develop`. |
 
 ## 9. Plan de cambios por raíz
@@ -319,6 +319,12 @@ tp-final-progra-iv/
 │               ├── ReservationRequestSettlementDecider.cs
 │               └── [A][P][R] ProvisionalReservationRequestMessage.cs
 │
+├── tools/
+│   └── F07Sender/                              T18-F07 smoke test manual
+│       ├── F07Sender.csproj
+│       ├── Program.cs                          solo emisor; sin receiver
+│       └── README.md                            variables, escenarios y advertencias
+│
 ├── tests/
 │   └── Booking/
 │       └── [A] Booking.Tests/                    T18-F07
@@ -374,13 +380,13 @@ Estado: `VALIDADO`.
 
 ### T18-C04 - Adaptador de Azure Service Bus
 
-Estado: `PARCIAL`. F05 y F06 están implementados y verificados localmente; la prueba controlada contra el broker y el reemplazo de `T18-G01` continúan pendientes.
+Estado: `PARCIAL`. F05 y F06 están implementados y verificados localmente y mediante una ventana controlada; el reemplazo de `T18-G01` continúa pendiente.
 
 - Agrega el SDK y la configuración del broker en Booking.Api.
 - Agrega el ciclo de vida provisorio del consumer según `T18-G02`.
 - Usa temporalmente `T18-G01` y concentra el gap en el mensaje provisorio y su mapper.
 - Recibe, deserializa, mapea y delega el mensaje a Business.
-- F06 implementa y verifica localmente `Complete`, `DeadLetter`, reintento por propagación y logs seguros. Esto no autoriza por sí solo una conexión a la subscription compartida.
+- F06 implementa y verifica `Complete`, `DeadLetter`, reintento por propagación y logs seguros. La ventana controlada de F07 confirmó esas rutas contra Azure sin convertir `T18-G02` en acuerdo permanente.
 - Commits realizados: `feat(booking): integrar consumer provisorio de Azure Service Bus` y `feat(booking): implementar settlement y observabilidad local`.
 
 ### T18-C05 - Reemplazo por el contrato de #15
@@ -395,9 +401,9 @@ Estado: `BLOQUEADO`.
 
 ### T18-C06 - Pruebas, documentación y cierre
 
-Estado: `EN_CURSO`. Las pruebas y la documentación local de F03 a F06 están registradas; F07, la defensa final y el cierre continúan pendientes.
+Estado: `EN_CURSO`. Las pruebas locales y controladas de F03 a F07 están registradas; F08 y F09 continúan pendientes.
 
-- Completa pruebas unitarias, de integración y smoke test controlado con Azure Service Bus.
+- Completa pruebas unitarias e integración local en `Booking.Tests`; el smoke test real se ejecuta manualmente con `tools/F07Sender`.
 - Actualiza la documentación personal, la hoja de ruta, la evidencia y la defensa oral.
 - Commits realizados hasta F06: `test(booking): verificar mapeo y delegación del consumer`, `test(booking): verificar decisiones de settlement`, `docs(booking): registrar implementación local de F05` y `docs(booking): registrar validación e implementación de F06`.
 
@@ -693,6 +699,16 @@ Restricciones permanentes para T18:
 - Respuesta clave (`T18-F02-R04`): se configuró `00:10:00`, las pruebas verifican `ExpiresAt = UtcNow + 10 minutos` y Booking.Tests finalizó con 48 casos correctos. `T18-B02` quedó cerrado, `T18-G01` y `T18-G02` permanecen abiertos y el consumer continuó deshabilitado. Alejandro aprobó los cambios separados de implementación, pruebas y documentación antes de crear los commits.
 - Validaciones relacionadas: `T18-V11`.
 
+### T18-F07-P01 - Ejecutar validación controlada con Azure Service Bus
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Realicemos las pruebas F07 siguiendo el plan aprobado, usando temporalmente `T18-G01`, PostgreSQL local y una ventana coordinada sobre `grupo4-booking-topic/booking`. Frenar ante cualquier incongruencia y no dejar el consumer activo al finalizar”.
+- Contexto: el equipo confirmó una ventana sin otros consumidores; el topic y la subscription fueron autorizados para desarrollo. PostgreSQL se ejecutó localmente y el consumer se activó solo durante la prueba.
+- Respuesta clave (`T18-F07-R01`): se validaron solicitud nueva (`Retained`/`Complete`), duplicado (`Duplicate`/`Complete`), conflicto de `RequestId` (`RequestPayloadConflict`/`DeadLetter`), mensaje inválido (`InvalidJson`/`DeadLetter`), asiento ocupado (`SeatTaken`/`Complete`) y excepción transitoria con reentrega `DeliveryCount` 1–3 y finalización en 4 al restaurar PostgreSQL.
+- Evidencia: logs seguros con `MessageId`, `RequestId`, `CorrelationId` y `DeliveryCount`; 48 pruebas locales correctas; consumer detenido al finalizar.
+- Alcance: se mantiene abierto `T18-G01`; la validación real no convierte los detalles de SDK de `T18-G02` en acuerdos permanentes.
+
 ## 12. Prompts previstos
 
 Estos prompts son guías. Se registrarán como historial real solamente cuando se ejecuten.
@@ -723,7 +739,8 @@ Resultado esperado (`T18-F09-R01`): PR revisable, sin secretos y con criterios d
 | `T18-V08` | `VALIDADO LOCAL` | Cada error determinístico del mapper produce una única decisión de dead-letter. |
 | `T18-V09` | `PENDIENTE` | El modelo provisorio se reemplaza por #15 sin cambiar Business/Data. |
 | `T18-V10` | `VALIDADO LOCAL` | `RequestConflict` e `InvalidRequest` producen dead-letter con códigos estables. |
-| `T18-V11` | `VALIDADO LOCAL` | Configuración `00:10:00`, cálculo UTC a diez minutos y 48/48 pruebas; consumer deshabilitado y sin conexión al broker. |
+| `T18-V11` | `VALIDADO LOCAL` | Configuración `00:10:00`, cálculo UTC a diez minutos y 48/48 pruebas. |
+| `T18-V12` | `VALIDADO` | F07 contra `grupo4-booking-topic/booking`: `Retained`, `Duplicate`, `RequestPayloadConflict`, `InvalidJson`, `SeatTaken` y reintento con `DeliveryCount` 1–4; consumer detenido al finalizar. |
 
 ## 14. Guion de defensa oral
 
