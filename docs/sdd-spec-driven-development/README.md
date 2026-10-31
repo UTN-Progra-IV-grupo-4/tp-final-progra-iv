@@ -38,13 +38,15 @@ docs/sdd-spec-driven-development/
 └── tickets/
     └── T18-booking-consumer/
         ├── SPEC.md
-        └── IMPLEMENTATION-LOG.md
+        ├── IMPLEMENTATION-LOG.md
+        └── ORAL-DEFENSE.md
 ```
 
 - `PROJECT-SPEC.md`: contexto de arquitectura utilizado para comprender los desarrollos propios.
 - `TICKET-SPEC-TEMPLATE.md`: formato personal reutilizable para tickets futuros.
 - `SPEC.md`: requisitos observables y diseño aceptado del ticket.
 - `IMPLEMENTATION-LOG.md`: relación cronológica entre especificación, código y validaciones.
+- `ORAL-DEFENSE.md`: borrador personal de exposición, limitado al comportamiento y evidencia ya validados.
 
 ## Estados
 

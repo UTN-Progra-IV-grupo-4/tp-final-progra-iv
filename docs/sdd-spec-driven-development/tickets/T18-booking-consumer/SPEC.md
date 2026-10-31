@@ -49,7 +49,7 @@ Una réplica de Booking consume una solicitud de un solo asiento. Si el asiento 
 | `T18-RQ-04` | Persistir `Rejected/SeatTaken` cuando el asiento esté ocupado. | Verificado en Business y Data | Prueba concurrente Business+PostgreSQL aprobada. |
 | `T18-RQ-05` | Tratar una reentrega compatible como duplicado exitoso. | Verificado en Business | Prueba unitaria de idempotencia aprobada. |
 | `T18-RQ-06` | Rechazar el mismo RequestId con otro evento o asiento. | Verificado localmente en Business y settlement | Pruebas unitarias de conflicto y dead-letter aprobadas. |
-| `T18-RQ-07` | Calcular `ExpiresAt` en UTC con una duración configurable. | Implementación verificada; valor final bloqueado | Prueba con TimeProvider fijo aprobada. |
+| `T18-RQ-07` | Calcular `ExpiresAt` en UTC con una duración configurable de 10 minutos. | Validado | Configuración `00:10:00` y prueba con TimeProvider fijo. |
 | `T18-RQ-08` | Completar el mensaje solamente después de persistir el resultado. | Verificado localmente | Pruebas unitarias de settlement aprobadas; falta prueba real. |
 | `T18-RQ-09` | Reintentar errores transitorios y enviar mensajes inválidos a dead-letter. | Verificado localmente | Pruebas de propagación y dead-letter aprobadas; falta prueba real. |
 
@@ -220,7 +220,7 @@ Límite de fases:
 | `T18-RQ-03..07` | `src/Booking/Booking.Business/Reservations/ProcessReservationRequest.cs` | Agregado | Verificado. |
 | `T18-RQ-03..07` | `src/Booking/Booking.Business/Reservations/ReservationRequestProcessor.cs` | Agregado | Verificado. |
 | `T18-RQ-03..07` | `src/Booking/Booking.Business/Reservations/ReservationProcessingResult.cs` | Agregado | Verificado. |
-| `T18-RQ-07` | `src/Booking/Booking.Business/Reservations/ReservationProcessingOptions.cs` | Agregado | Verificado con valor de prueba. |
+| `T18-RQ-07` | `src/Booking/Booking.Business/Reservations/ReservationProcessingOptions.cs` y `src/Booking/Booking.Api/appsettings.json` | Agregado | Verificado con la duración acordada de 10 minutos. |
 | `T18-RQ-03..07` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorTests.cs` | Agregado | 14 casos unitarios aprobados. |
 | `T18-RQ-03,04` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorIntegrationTests.cs` | Agregado | Concurrencia real aprobada. |
 | `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/AzureServiceBusReservationRequestConsumer.cs`, `ReservationRequestConsumerHostedService.cs`, `ReservationRequestMapper.cs` y `ReservationRequestMessageHandler.cs` | Agregado | Ciclo de vida, recepción, mapeo y delegación verificados localmente; conexión real pendiente. |
@@ -237,13 +237,13 @@ Límite de fases:
 | `T18-AC-04` | El asiento está libre. | Dos RequestId compiten simultáneamente. | Una reserva queda `Retained` y la otra `Rejected/SeatTaken`. |
 | `T18-AC-05` | PostgreSQL falla de forma transitoria. | Se procesa el mensaje. | El mensaje no se completa y puede reintentarse. |
 
-## 12. Pendientes
+## 12. Pendientes y bloqueos resueltos
 
 | ID | Pendiente | Impacto | Condición de cierre |
 |---|---|---|---|
 | `T18-G01` | Clase y documentación del contrato definitivo de #15 todavía ausentes de `develop`. | Impide cerrar la integración aunque las reglas semánticas básicas ya estén definidas. | Reemplazar modelo y mapper provisorios y validar con un mensaje producido desde el contrato compartido. |
 | `T18-G02` | Detalles técnicos del consumer y settlement. | La alternativa está implementada y verificada localmente, pero no debe presentarse como decisión del equipo. | Validar en una prueba controlada con Azure Service Bus y mantener provisorio lo que siga sin acuerdo. |
-| `T18-B02` | Duración de retención todavía “A definir” en #18. | Impide calcular el `ExpiresAt` final. | Acordar valor y configurarlo sin hardcodearlo. |
+| `T18-B02` | Duración de retención. | Cerrado: el equipo definió 10 minutos el 2026-10-31. | Configurada como `ReservationProcessing:RetentionDuration = 00:10:00` y verificada en UTC. |
 | `T18-E01` | Docker/PostgreSQL para pruebas. | Cerrado: Docker Desktop y Testcontainers operativos. | Cumplida el 2026-10-31. |
 
 ## 13. Evidencia actual
@@ -259,4 +259,5 @@ Límite de fases:
 - F05 agregó pruebas del contrato `T18-G01`, coherencia de `MessageId`, delegación al processor scoped, validación de opciones y ciclo de vida con el consumer deshabilitado.
 - Resultado acumulado después de F06: 48 pruebas correctas, 0 fallidas y 0 omitidas.
 - F06 verificó todos los errores del mapper, outcomes de Business, propagación de excepciones, fallos de settlement y ausencia de body o excepción cruda en logs.
+- `T18-B02` quedó cerrado con una retención configurable de 10 minutos; las pruebas verifican `ExpiresAt = UtcNow + 00:10:00`.
 - No se abrió una conexión a Azure Service Bus ni se consumió la subscription compartida.

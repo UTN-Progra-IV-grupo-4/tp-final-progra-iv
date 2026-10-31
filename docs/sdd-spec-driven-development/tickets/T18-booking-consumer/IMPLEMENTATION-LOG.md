@@ -237,3 +237,53 @@ Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el f
 ### Estado
 
 `VALIDADO`: Alejandro aprobó el diff documental el 2026-10-31. Las correcciones quedaron limitadas a la especificación personal, el registro de implementación y la hoja de ruta, sin iniciar F07 ni modificar código productivo.
+
+## 2026-10-31 - Borrador de defensa oral de F01 a F06
+
+### Alcance
+
+- Se preparó y validó un guion personal de exposición limitado a F01-F06.
+- Se relacionaron arquitectura, flujo, concurrencia, idempotencia, settlement, reintentos, dead-letter y observabilidad con el código y las pruebas actuales.
+- Se incorporaron preguntas probables de defensa y respuestas breves.
+- Se conservaron como pendientes el contrato de #15, la duración de retención y la prueba real con Azure Service Bus.
+
+### Resultado
+
+- Documento agregado: `ORAL-DEFENSE.md`.
+- Estado de F08: `PARCIAL`; existe un borrador validado, pero la documentación final depende de F07 y de las definiciones pendientes.
+- Sin cambios en código productivo, pruebas o configuración.
+
+## 2026-10-31 - Duración oficial de retención
+
+### Decisión
+
+- El equipo definió una retención de 10 minutos.
+- `T18-B02` queda cerrado.
+- La duración continúa siendo configuración y no una constante dentro de Business.
+- El intervalo del job de vencimiento de #20 es una decisión independiente.
+
+### Cambios preparados
+
+- `Booking.Api/appsettings.json`: `ReservationProcessing:RetentionDuration = 00:10:00`.
+- Pruebas de Business: cálculo esperado de `ExpiresAt` actualizado a 10 minutos desde un UTC fijo.
+- Especificación, hoja de ruta y defensa oral alineadas con la decisión.
+
+### Restricciones conservadas
+
+- `T18-G01` y `T18-G02` permanecen abiertos.
+- El consumer continúa deshabilitado.
+- No se realiza conexión a Azure Service Bus durante esta validación.
+
+### Validaciones
+
+| Validación | Resultado |
+|---|---|
+| Configuración | `RetentionDuration=00:10:00`. |
+| Cálculo UTC | Las pruebas verifican `ExpiresAt = UtcNow + 10 minutos`. |
+| Suite Booking.Tests | 48 correctas, 0 fallidas, 0 omitidas. |
+| Consumer | `AzureServiceBusEnabled=False`. |
+| Broker | Sin conexión a Azure Service Bus. |
+
+### Estado
+
+`VERIFICADO_LOCALMENTE`: la decisión y el comportamiento están comprobados; los cambios permanecen sin commit para revisión separada de implementación, pruebas y documentación.

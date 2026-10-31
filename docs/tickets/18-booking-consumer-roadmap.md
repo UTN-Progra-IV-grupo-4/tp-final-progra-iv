@@ -139,7 +139,7 @@ El mensaje comunica el id de solicitud, el evento y el asiento. No transporta ca
 
 Estas cuatro relaciones fueron validadas expresamente por Alejandro el 2026-10-31. El material no define `IHostedService`, scopes de DI, `AutoCompleteMessages`, reglas exactas del mapper ni parámetros del SDK; esas decisiones permanecen provisorias.
 
-## 6. Bloqueos y definiciones pendientes
+## 6. Bloqueos y definiciones
 
 ### T18-B01 - Contrato compartido de #15
 
@@ -149,9 +149,9 @@ La revisión actual confirmó que `docs/contracts/reservation-request.md` no exi
 
 ### T18-B02 - Duración de la retención
 
-Estado: `BLOQUEADO`.
+Estado: `VALIDADO` y cerrado el 2026-10-31 por decisión del equipo.
 
-El valor está “a definir”. La duración debe ser configuración y `ExpiresAt` debe calcularse con UTC; no se debe hardcodear una decisión no acordada.
+La retención dura 10 minutos. Se representa como `ReservationProcessing:RetentionDuration = 00:10:00` y `ExpiresAt` se calcula como `UtcNow + RetentionDuration`. El intervalo de ejecución del job de #20 es una decisión diferente y continúa fuera del alcance de #18.
 
 ## 7. Gaps provisorios
 
@@ -242,7 +242,7 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 |---|---|---|---|
 | `T18-F00` Entorno | `VALIDADO` | Preparar .NET, Docker, PostgreSQL y secretos. | Booking arranca y consulta PostgreSQL; claves de broker presentes. |
 | `T18-F01` Entendimiento | `VALIDADO` | Delimitar alcance, arquitectura, concurrencia e idempotencia. | Plan explicable y alineado con issue y TP. |
-| `T18-F02` Contratos y configuración | `PROVISORIO` | Avanzar con `T18-G01` y confirmar contrato #15 y duración de retención. | El gap queda aislado; al cerrar, se usa el contrato definitivo sin afectar Business/Data. |
+| `T18-F02` Contratos y configuración | `PROVISORIO` | Avanzar con `T18-G01`, integrar el contrato de #15 cuando exista y usar la retención validada de 10 minutos. | `T18-B02` cerrado; el gap del contrato queda aislado y debe reemplazarse sin afectar Business/Data. |
 | `T18-F03` Data | `VALIDADO` | Implementar consultas e inserciones race-safe. | Distingue creado, duplicado y asiento ocupado. |
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
 | `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente; conexión real diferida hasta una prueba controlada y autorizada. |
@@ -668,27 +668,40 @@ Restricciones permanentes para T18:
 - Prompt: “Actualizá únicamente la especificación personal, el registro de implementación y la hoja de ruta del ticket #18 con el resultado de la auditoría validada. Corregí los estados desactualizados de F06, C04, C06, F07 y F08; actualizá el mapa de archivos y evidencias; registrá los prompts reales pendientes y documentá explícitamente el protocolo personal de validación por bloques. Conservá T18-G01, T18-G02 y T18-B02 abiertos, mantené F05 y F06 como parciales hasta la prueba controlada con Azure Service Bus, y no modifiques código productivo ni inicies F07. Reemplazá los commits sugeridos en inglés por descripciones en español. Antes de crear un commit, mostrame el diff documental para validarlo”.
 - Respuesta clave (`T18-F08-R06`): se corrigieron los estados y referencias desactualizados, se incorporaron los archivos y evidencias de F06, se registraron los prompts faltantes y se documentó el protocolo personal. Alejandro aprobó el diff limitado a los tres documentos personales antes del commit; no se modificó código ni se inició F07.
 
+### T18-F08-P07 - Preparar defensa oral de F01 a F06
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Prepará un borrador de defensa oral del ticket #18 limitado a F01–F06. Explicá el problema, la arquitectura por capas, el flujo desde Azure Service Bus hasta PostgreSQL, concurrencia, idempotencia, settlement, reintentos, dead-letter y observabilidad. Incluí preguntas probables del profesor y respuestas breves apoyadas en el código y las pruebas actuales. Marcá expresamente como pendientes el contrato de #15, la duración de retención y la prueba real con Azure Service Bus. No modifiques código ni presentes F05/F06 como integración final cerrada. Antes de persistir la documentación, mostrame el borrador para validarlo”.
+- Contexto: preparar material personal de exposición mientras #15 y la duración de retención continúan pendientes, sin iniciar F07 ni convertir el borrador en documentación final del ticket.
+- Respuesta clave (`T18-F08-R07`): Alejandro validó el borrador y se incorporó `ORAL-DEFENSE.md` con el flujo de F01-F06, referencias al código, evidencia de 48 pruebas, preguntas probables y declaración expresa de los tres pendientes. F08 permanece `PARCIAL`.
+- Cambios relacionados: documentación personal; sin código, configuración, pruebas ni conexión a Azure Service Bus.
+
+### T18-F02-P03 - Revalidar dependencias definitivas
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Revisá el estado actual de #15 y confirmá el contrato que consumirá Booking. Identificá campos, metadata, MessageId y CorrelationId. No inventes un contrato paralelo. Confirmá también la duración acordada para la retención. No modifiques código hasta que valide el resultado”.
+- Respuesta clave (`T18-F02-R03`): #15 continúa abierto, sin contrato físico ni documentación en `develop`; `T18-G01` permanece abierto. La duración seguía sin definición al realizar la revisión y luego fue resuelta por decisión del equipo en `T18-F02-P04`.
+- Bloqueos relacionados: `T18-B01` continúa abierto; `T18-B02` quedó pendiente de la decisión posterior.
+
+### T18-F02-P04 - Configurar la retención acordada
+
+- Fecha: 2026-10-31
+- Estado: `VALIDADO`
+- Prompt: “Registrá la decisión del equipo de utilizar una retención de 10 minutos. Actualizá la especificación, hoja de ruta, registro de implementación y borrador de defensa oral para cerrar T18-B02. Configurá `ReservationProcessing:RetentionDuration` como `00:10:00`, ajustá las pruebas relacionadas y verificá que `ExpiresAt` se calcule en UTC con diez minutos. Mantené abiertos T18-G01 y T18-G02 y no actives Azure Service Bus. Separá documentación, implementación y pruebas para revisarlas antes de crear commits”.
+- Respuesta clave (`T18-F02-R04`): se configuró `00:10:00`, las pruebas verifican `ExpiresAt = UtcNow + 10 minutos` y Booking.Tests finalizó con 48 casos correctos. `T18-B02` quedó cerrado, `T18-G01` y `T18-G02` permanecen abiertos y el consumer continuó deshabilitado. Alejandro aprobó los cambios separados de implementación, pruebas y documentación antes de crear los commits.
+- Validaciones relacionadas: `T18-V11`.
+
 ## 12. Prompts previstos
 
 Estos prompts son guías. Se registrarán como historial real solamente cuando se ejecuten.
-
-### T18-F02-P03 - Resolver definitivamente las dependencias
-
-> Revisá el estado actual de #15 y confirmá el contrato que consumirá Booking. Identificá campos, metadata, MessageId y CorrelationId. No inventes un contrato paralelo. Confirmá también la duración acordada para la retención.
-
-Resultado esperado (`T18-F02-R03`): contrato final trazable, eliminación de `T18-G01` y duración configurable aceptada.
 
 ### T18-F07-P01 - Verificar aceptación
 
 > Ejecutá las pruebas del ticket 18 contra PostgreSQL real. Demostrá solicitud nueva, duplicado, payload inconsistente, mensaje inválido y dos solicitudes simultáneas por el mismo asiento.
 
 Resultado esperado (`T18-F07-R01`): evidencia reproducible de una reserva retenida y otra rechazada con SeatTaken, sin duplicados.
-
-### T18-F08-P07 - Preparar defensa oral
-
-> Generá la documentación final del ticket 18 con diagrama, instrucciones de ejecución, decisiones, tradeoffs y un simulacro de preguntas de defensa. Relacioná la solución con N-Layer, mensajería, concurrencia e idempotencia vistas en clase.
-
-Resultado esperado (`T18-F08-R07`): explicación breve y demostración ejecutable por otro integrante.
 
 ### T18-F09-P01 - Revisión final
 
@@ -710,6 +723,7 @@ Resultado esperado (`T18-F09-R01`): PR revisable, sin secretos y con criterios d
 | `T18-V08` | `VALIDADO LOCAL` | Cada error determinístico del mapper produce una única decisión de dead-letter. |
 | `T18-V09` | `PENDIENTE` | El modelo provisorio se reemplaza por #15 sin cambiar Business/Data. |
 | `T18-V10` | `VALIDADO LOCAL` | `RequestConflict` e `InvalidRequest` producen dead-letter con códigos estables. |
+| `T18-V11` | `VALIDADO LOCAL` | Configuración `00:10:00`, cálculo UTC a diez minutos y 48/48 pruebas; consumer deshabilitado y sin conexión al broker. |
 
 ## 14. Guion de defensa oral
 
