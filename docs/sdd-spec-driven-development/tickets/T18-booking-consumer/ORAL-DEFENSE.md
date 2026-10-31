@@ -1,6 +1,6 @@
-# T18 - Borrador validado de defensa oral, F01 a F06
+# T18 - Defensa oral personal validada, F01 a F07
 
-> Material personal de exposición validado por Alejandro el 2026-10-31. Explica únicamente el avance de F01 a F06 y no presenta F05/F06 como integración final cerrada.
+> Material personal de exposición validado por Alejandro el 2026-10-31. Explica el avance de F01 a F07 y conserva como provisorios el contrato y las decisiones técnicas aún no cerradas.
 
 ## 1. Presentación breve
 

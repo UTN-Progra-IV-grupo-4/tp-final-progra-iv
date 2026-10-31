@@ -248,7 +248,7 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 | `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente y en una ventana controlada; el contrato definitivo de #15 sigue pendiente. |
 | `T18-F06` Settlement y observabilidad local | `PARCIAL` | Completar, reintentar o dead-letter y generar logs locales. | Matriz verificada localmente y contra Azure; las decisiones técnicas siguen bajo `T18-G02`. |
 | `T18-F07` Pruebas | `VALIDADO` | Ejecutar la aceptación formal y el smoke test controlado; reutilizar la evidencia local producida por F03 a F06. | Casos reales de éxito, duplicado, conflicto, inválido, asiento ocupado y reintento documentados. |
-| `T18-F08` Documentación y defensa | `PARCIAL` | Completar la guía de ejecución, diagramas y argumentos a partir de la documentación personal existente. | Registrar evidencia de F07 y preparar la documentación final. |
+| `T18-F08` Documentación y defensa | `EN_CURSO` | Completar la guía de ejecución, diagramas y argumentos a partir de la documentación personal existente. | Registrar evidencia de F07, protocolo y defensa final. |
 | `T18-F09` Cierre | `PENDIENTE` | Revisar diff, compilar y preparar PR. | Checklist completo y PR hacia `develop`. |
 
 ## 9. Plan de cambios por raíz
@@ -680,7 +680,7 @@ Restricciones permanentes para T18:
 - Estado: `VALIDADO`
 - Prompt: “Prepará un borrador de defensa oral del ticket #18 limitado a F01–F06. Explicá el problema, la arquitectura por capas, el flujo desde Azure Service Bus hasta PostgreSQL, concurrencia, idempotencia, settlement, reintentos, dead-letter y observabilidad. Incluí preguntas probables del profesor y respuestas breves apoyadas en el código y las pruebas actuales. Marcá expresamente como pendientes el contrato de #15, la duración de retención y la prueba real con Azure Service Bus. No modifiques código ni presentes F05/F06 como integración final cerrada. Antes de persistir la documentación, mostrame el borrador para validarlo”.
 - Contexto: preparar material personal de exposición mientras #15 y la duración de retención continúan pendientes, sin iniciar F07 ni convertir el borrador en documentación final del ticket.
-- Respuesta clave (`T18-F08-R07`): Alejandro validó el borrador y se incorporó `ORAL-DEFENSE.md` con el flujo de F01-F06, referencias al código, evidencia de 48 pruebas, preguntas probables y declaración expresa de los tres pendientes. F08 permanece `PARCIAL`.
+- Respuesta clave (`T18-F08-R07`): Alejandro validó el borrador y se incorporó `ORAL-DEFENSE.md` con el flujo de F01-F06, referencias al código, evidencia de 48 pruebas, preguntas probables y declaración expresa de los tres pendientes. F08 quedó `PARCIAL` en ese momento histórico.
 - Cambios relacionados: documentación personal; sin código, configuración, pruebas ni conexión a Azure Service Bus.
 
 ### T18-F02-P03 - Revalidar dependencias definitivas
@@ -708,6 +708,15 @@ Restricciones permanentes para T18:
 - Respuesta clave (`T18-F07-R01`): se validaron solicitud nueva (`Retained`/`Complete`), duplicado (`Duplicate`/`Complete`), conflicto de `RequestId` (`RequestPayloadConflict`/`DeadLetter`), mensaje inválido (`InvalidJson`/`DeadLetter`), asiento ocupado (`SeatTaken`/`Complete`) y excepción transitoria con reentrega `DeliveryCount` 1–3 y finalización en 4 al restaurar PostgreSQL.
 - Evidencia: logs seguros con `MessageId`, `RequestId`, `CorrelationId` y `DeliveryCount`; 48 pruebas locales correctas; consumer detenido al finalizar.
 - Alcance: se mantiene abierto `T18-G01`; la validación real no convierte los detalles de SDK de `T18-G02` en acuerdos permanentes.
+
+### T18-F08-P08 - Actualizar documentación final después de F07
+
+- Fecha: 2026-10-31
+- Estado: `EN_CURSO`
+- Prompt: “Avancemos con F08. Auditemos la documentación personal, el mapa de archivos, las evidencias y la defensa oral después de la validación controlada de F07, sin modificar código productivo”.
+- Contexto: F07 ya está validado contra Azure Service Bus con PostgreSQL local; la documentación todavía contenía referencias históricas que indicaban que la prueba real estaba pendiente.
+- Respuesta parcial (`T18-F08-R08`): se actualizaron SPEC, IMPLEMENTATION-LOG, roadmap y ORAL-DEFENSE para reflejar F07, mantener abiertos `T18-G01`/`T18-G02` y separar pruebas automatizadas de smoke test manual.
+- Próximo paso: revisar el diff documental y preparar F09 sin realizar push ni cerrar el PR todavía.
 
 ## 12. Prompts previstos
 

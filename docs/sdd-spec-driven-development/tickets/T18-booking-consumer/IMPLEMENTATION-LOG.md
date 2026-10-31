@@ -220,7 +220,7 @@ Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el f
 | F05 | Implementado y verificado localmente; permanece `PARCIAL` por el contrato provisorio y la falta de recepción real controlada. |
 | F06 | Implementado y verificado localmente; permanece `PARCIAL` hasta una prueba controlada con Azure Service Bus. |
 | F07 | Existe evidencia local reutilizable, pero la fase de aceptación y el smoke test no comenzaron; estado documental `PENDIENTE`. |
-| F08 | La documentación personal está avanzada, pero faltan la guía final de ejecución y la preparación de defensa; estado `PARCIAL`. |
+| F08 | En esa auditoría la documentación personal estaba avanzada, pero faltaban la guía final de ejecución y la preparación de defensa; estado histórico `PARCIAL`. |
 | F09 | Revisión final contra `develop` y preparación del PR pendientes. |
 
 ### Evidencia revalidada
@@ -250,7 +250,7 @@ Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el f
 ### Resultado
 
 - Documento agregado: `ORAL-DEFENSE.md`.
-- Estado de F08: `PARCIAL`; existe un borrador validado, pero la documentación final depende de F07 y de las definiciones pendientes.
+- Estado de F08 en esa fecha: `PARCIAL`; existía un borrador validado, pero la documentación final dependía de F07 y de las definiciones pendientes.
 - Sin cambios en código productivo, pruebas o configuración.
 
 ## 2026-10-31 - Duración oficial de retención
@@ -319,3 +319,15 @@ Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el f
 ### Estado
 
 `VALIDADO` para `T18-F07` en una ventana controlada de una sola instancia. F05 y F06 permanecen `PARCIALES` por `T18-G01` y `T18-G02`; F08 y F09 continúan pendientes.
+
+## 2026-10-31 - Inicio de documentación final, F08
+
+- Se inició la auditoría final de la documentación personal después de validar F07.
+- Se actualizaron las referencias que todavía presentaban la prueba real de Azure como pendiente.
+- La defensa oral pasó de un alcance F01-F06 a F01-F07 y conserva explícitamente los pendientes de #15, `T18-G01`, `T18-G02`, competing consumers y F09.
+- Se documentó la separación entre `Booking.Tests` (pruebas automatizadas locales) y `tools/F07Sender` (smoke test manual no productivo).
+- No se modificó código productivo ni configuración.
+
+### Estado
+
+`EN_CURSO` para `T18-F08`: la guía y la defensa están alineadas con F07; resta la revisión final del diff documental y la preparación del cierre F09.

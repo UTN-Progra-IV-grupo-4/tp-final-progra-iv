@@ -223,8 +223,8 @@ Límite de fases:
 | `T18-RQ-07` | `src/Booking/Booking.Business/Reservations/ReservationProcessingOptions.cs` y `src/Booking/Booking.Api/appsettings.json` | Agregado | Verificado con la duración acordada de 10 minutos. |
 | `T18-RQ-03..07` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorTests.cs` | Agregado | 14 casos unitarios aprobados. |
 | `T18-RQ-03,04` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorIntegrationTests.cs` | Agregado | Concurrencia real aprobada. |
-| `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/AzureServiceBusReservationRequestConsumer.cs`, `ReservationRequestConsumerHostedService.cs`, `ReservationRequestMapper.cs` y `ReservationRequestMessageHandler.cs` | Agregado | Ciclo de vida, recepción, mapeo y delegación verificados localmente; conexión real pendiente. |
-| `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/ReservationRequestMessageProcessor.cs`, `ReservationRequestSettlementDecider.cs` y `AzureServiceBusReservationRequestMessageSettlement.cs` | Agregado | Settlement, propagación y observabilidad verificados localmente; prueba real pendiente. |
+| `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/AzureServiceBusReservationRequestConsumer.cs`, `ReservationRequestConsumerHostedService.cs`, `ReservationRequestMapper.cs` y `ReservationRequestMessageHandler.cs` | Agregado | Ciclo de vida, recepción, mapeo y delegación verificados localmente; F07 confirmó recepción real en una única instancia. |
+| `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/ReservationRequestMessageProcessor.cs`, `ReservationRequestSettlementDecider.cs` y `AzureServiceBusReservationRequestMessageSettlement.cs` | Agregado | Settlement, propagación y observabilidad verificados localmente y en la ventana controlada de F07. |
 | `T18-RQ-01,02,08,09` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración, ciclo de vida, settlement, propagación de excepciones y logs seguros verificados dentro de las 48 pruebas de Booking.Tests. |
 
 ## 11. Escenarios de aceptación
