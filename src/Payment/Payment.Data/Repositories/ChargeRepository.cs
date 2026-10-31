@@ -28,6 +28,22 @@ public class ChargeRepository(PaymentDbContext db) : IChargeRepository
         }
     }
 
+    public async Task<bool> TryReclaimFailedAsync(Guid chargeId, CancellationToken cancellationToken = default)
+    {
+        // UPDATE condicional en un solo paso: la base evalúa el WHERE con la fila bloqueada, así que
+        // entre dos reintentos simultáneos solo uno ve Failed. Leer y después guardar dejaría a ambos cobrar.
+        // Va directo a la base sin pasar por el change tracker: la entidad en memoria sigue diciendo Failed.
+        var affected = await db.Charges
+            .Where(c => c.Id == chargeId && c.Status == ChargeStatus.Failed)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(c => c.Status, ChargeStatus.Pending)
+                .SetProperty(c => c.FailureReason, (string?)null)
+                .SetProperty(c => c.CompletedAt, (DateTime?)null),
+                cancellationToken);
+
+        return affected == 1;
+    }
+
     public async Task UpdateAsync(Charge charge, CancellationToken cancellationToken = default)
     {
         db.Charges.Update(charge);

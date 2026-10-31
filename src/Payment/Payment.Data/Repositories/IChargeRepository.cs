@@ -14,5 +14,9 @@ public interface IChargeRepository
     // eso es una regla de negocio y la decide Business, no esta capa.
     Task<bool> TryAddAsync(Charge charge, CancellationToken cancellationToken = default);
 
+    // Pasa un cobro de Failed a Pending para reintentarlo. Devuelve false si otro pedido ya lo tomó:
+    // es el mismo "tomar el turno antes de cobrar" que TryAddAsync, pero sobre una fila existente.
+    Task<bool> TryReclaimFailedAsync(Guid chargeId, CancellationToken cancellationToken = default);
+
     Task UpdateAsync(Charge charge, CancellationToken cancellationToken = default);
 }

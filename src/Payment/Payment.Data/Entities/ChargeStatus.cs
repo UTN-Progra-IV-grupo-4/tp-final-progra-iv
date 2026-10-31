@@ -10,4 +10,8 @@ public enum ChargeStatus
     Pending = 1,
     Approved = 2,
     Declined = 3,
+
+    // Error técnico de la pasarela, distinto de un rechazo de negocio: no se cobró nada,
+    // así que un reintento puede volver a intentarlo (ver IChargeRepository.TryReclaimFailedAsync).
+    Failed = 4,
 }

@@ -21,6 +21,8 @@ public class PaymentDbContext(DbContextOptions<PaymentDbContext> options) : DbCo
             // Como texto: se lee directo en psql y no se rompe si alguien reordena el enum.
             charge.Property(c => c.Status).HasConversion<string>().HasMaxLength(16);
 
+            charge.Property(c => c.Currency).HasMaxLength(3);
+
             charge.Property(c => c.FailureReason).HasMaxLength(200);
         });
     }
