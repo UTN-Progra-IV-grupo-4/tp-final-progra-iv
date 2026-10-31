@@ -17,9 +17,9 @@ public sealed class ExpiredReservationsBackgroundServiceTests
         await using var serviceProvider = services.BuildServiceProvider();
         var worker = new ExpiredReservationsBackgroundService(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            Options.Create(new ExpiredReservationsBackgroundServiceOptions
+            Options.Create(new ReservationProcessingOptions
             {
-                Interval = TimeSpan.FromMilliseconds(20)
+                ExpirationCheckInterval = TimeSpan.FromMilliseconds(20)
             }),
             NullLogger<ExpiredReservationsBackgroundService>.Instance);
 
