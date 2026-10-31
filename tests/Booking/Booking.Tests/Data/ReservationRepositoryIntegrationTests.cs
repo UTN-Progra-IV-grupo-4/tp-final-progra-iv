@@ -1,5 +1,7 @@
+using Booking.Business.Reservations;
 using Booking.Data.Models;
 using Booking.Data.Repositories;
+using Booking.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
 
 namespace Booking.Tests.Data;
@@ -59,6 +61,72 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
             .AsNoTracking()
             .SingleAsync();
         Assert.Equal(ReservationStatus.Expired, storedReservation.Status);
+    }
+
+    [Fact]
+    public async Task ExpireRetainedReservations_WhenSeatIsReleased_AllowsNewReservationForSameEventAndSeat()
+    {
+        await fixture.ResetAsync();
+        var now = DateTimeOffset.UtcNow;
+        var eventId = Guid.NewGuid();
+        var seatId = Guid.NewGuid();
+        var expiredReservation = CreateRetainedReservation(
+            Guid.NewGuid(),
+            eventId,
+            seatId);
+        expiredReservation.ExpiresAt = now.AddTicks(-1);
+
+        await using (var initialDbContext = fixture.CreateDbContext())
+        {
+            var initialRepository = new ReservationRepository(initialDbContext);
+            var insertResult = await initialRepository.TryInsertAsync(expiredReservation);
+            Assert.Equal(ReservationInsertOutcome.Created, insertResult.Outcome);
+        }
+
+        await using (var expirationDbContext = fixture.CreateDbContext())
+        {
+            var expirationRepository = new ReservationRepository(expirationDbContext);
+            var useCase = new ExpireRetainedReservations(
+                expirationRepository,
+                new FixedTimeProvider(now));
+
+            var result = await useCase.ExecuteAsync();
+
+            Assert.Equal(1, result.ProcessedCount);
+            Assert.Equal(new[] { expiredReservation.Id }, result.ReservationIds);
+            Assert.Equal(now, result.ExecutedAtUtc);
+        }
+
+        var newReservation = CreateRetainedReservation(
+            Guid.NewGuid(),
+            eventId,
+            seatId);
+        await using (var newReservationDbContext = fixture.CreateDbContext())
+        {
+            var newReservationRepository = new ReservationRepository(newReservationDbContext);
+
+            var insertResult = await newReservationRepository.TryInsertAsync(newReservation);
+
+            Assert.Equal(ReservationInsertOutcome.Created, insertResult.Outcome);
+        }
+
+        await using var verificationDbContext = fixture.CreateDbContext();
+        var storedReservations = await verificationDbContext.Reservations
+            .AsNoTracking()
+            .OrderBy(reservation => reservation.Status)
+            .ToListAsync();
+
+        Assert.Equal(2, storedReservations.Count);
+        Assert.Contains(storedReservations, reservation =>
+            reservation.Id == expiredReservation.Id &&
+            reservation.EventId == eventId &&
+            reservation.SeatId == seatId &&
+            reservation.Status == ReservationStatus.Expired);
+        Assert.Contains(storedReservations, reservation =>
+            reservation.Id == newReservation.Id &&
+            reservation.EventId == eventId &&
+            reservation.SeatId == seatId &&
+            reservation.Status == ReservationStatus.Retained);
     }
 
     [Theory]
