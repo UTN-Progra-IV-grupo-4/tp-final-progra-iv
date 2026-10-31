@@ -1,4 +1,5 @@
 using Booking.Api.Messaging;
+using Booking.Api.Reservations;
 using Booking.Business;
 using Booking.Business.Reservations;
 
@@ -16,6 +17,15 @@ if (string.IsNullOrWhiteSpace(bookingConnectionString))
 builder.Services.AddBookingBusiness(bookingConnectionString);
 builder.Services.Configure<ReservationProcessingOptions>(
     builder.Configuration.GetSection("ReservationProcessing"));
+builder.Services
+    .AddOptions<ExpiredReservationsBackgroundServiceOptions>()
+    .Bind(builder.Configuration.GetSection(
+        ExpiredReservationsBackgroundServiceOptions.SectionName))
+    .Validate(
+        options => options.Interval > TimeSpan.Zero,
+        $"{nameof(ExpiredReservationsBackgroundServiceOptions.Interval)} must be greater than zero.")
+    .ValidateOnStart();
+builder.Services.AddHostedService<ExpiredReservationsBackgroundService>();
 builder.Services.AddBookingMessaging(builder.Configuration);
 
 builder.Services.AddControllers();
