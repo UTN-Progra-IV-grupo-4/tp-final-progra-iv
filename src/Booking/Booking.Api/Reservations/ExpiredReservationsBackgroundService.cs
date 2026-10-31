@@ -14,22 +14,23 @@ internal sealed class ExpiredReservationsBackgroundService : BackgroundService
 
     public ExpiredReservationsBackgroundService(
         IServiceScopeFactory scopeFactory,
-        IOptions<ExpiredReservationsBackgroundServiceOptions> options,
+        IOptions<ReservationProcessingOptions> options,
         ILogger<ExpiredReservationsBackgroundService> logger)
     {
         ArgumentNullException.ThrowIfNull(scopeFactory);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
 
-        interval = options.Value.Interval;
+        var interval = options.Value.ExpirationCheckInterval;
         if (interval <= TimeSpan.Zero)
         {
             throw new InvalidOperationException(
-                $"{nameof(ExpiredReservationsBackgroundServiceOptions.Interval)} must be greater than zero.");
+                $"{nameof(ReservationProcessingOptions.ExpirationCheckInterval)} must be greater than zero.");
         }
 
         this.scopeFactory = scopeFactory;
         this.logger = logger;
+        this.interval = interval;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
