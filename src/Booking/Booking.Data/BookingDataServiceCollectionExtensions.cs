@@ -1,3 +1,4 @@
+using Booking.Data.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,6 +11,7 @@ public static class BookingDataServiceCollectionExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         services.AddDbContext<BookingDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddScoped<IReservationRepository, ReservationRepository>();
 
         return services;
     }
