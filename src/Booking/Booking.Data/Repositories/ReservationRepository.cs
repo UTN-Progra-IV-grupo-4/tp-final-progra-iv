@@ -30,6 +30,8 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
                 entry.State = EntityState.Detached;
             }
 
+            dbContext.Entry(reservation).State = EntityState.Detached;
+
             var existingReservation = await dbContext.Reservations
                 .AsNoTracking()
                 .SingleOrDefaultAsync(
@@ -69,6 +71,27 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
         var updatedCount = await dbContext.Reservations
             .Where(reservation =>
                 reservation.Id == reservationId &&
+                reservation.Status == ReservationStatus.Retained &&
+                reservation.ExpiresAt <= now)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    reservation => reservation.Status,
+                    ReservationStatus.Expired),
+                cancellationToken);
+
+        return updatedCount > 0;
+    }
+
+    public async Task<bool> TryExpireRetainedReservationForSeatAsync(
+        Guid eventId,
+        Guid seatId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        var updatedCount = await dbContext.Reservations
+            .Where(reservation =>
+                reservation.EventId == eventId &&
+                reservation.SeatId == seatId &&
                 reservation.Status == ReservationStatus.Retained &&
                 reservation.ExpiresAt <= now)
             .ExecuteUpdateAsync(

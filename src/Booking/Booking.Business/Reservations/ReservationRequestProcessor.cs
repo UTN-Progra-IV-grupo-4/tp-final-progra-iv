@@ -55,6 +55,22 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
             retainedReservation,
             cancellationToken);
 
+        if (insertResult.Outcome == ReservationInsertOutcome.SeatTaken)
+        {
+            var expiredReservation = await reservationRepository.TryExpireRetainedReservationForSeatAsync(
+                request.EventId,
+                request.SeatId,
+                timeProvider.GetUtcNow(),
+                cancellationToken);
+
+            if (expiredReservation)
+            {
+                insertResult = await reservationRepository.TryInsertAsync(
+                    retainedReservation,
+                    cancellationToken);
+            }
+        }
+
         return insertResult.Outcome switch
         {
             ReservationInsertOutcome.Created => new ReservationProcessingResult(

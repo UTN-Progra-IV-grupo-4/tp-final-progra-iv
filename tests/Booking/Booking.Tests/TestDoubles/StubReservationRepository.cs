@@ -12,6 +12,7 @@ public sealed class StubReservationRepository : IReservationRepository
 
     public IReadOnlyList<Reservation> AttemptedReservations => attemptedReservations;
     public List<(Guid ReservationId, DateTimeOffset Now)> ExpirationAttempts { get; } = [];
+    public List<(Guid EventId, Guid SeatId, DateTimeOffset Now)> SeatExpirationAttempts { get; } = [];
 
     public void EnqueueResult(ReservationInsertResult result) => results.Enqueue(result);
 
@@ -66,6 +67,28 @@ public sealed class StubReservationRepository : IReservationRepository
             reservation.Status == ReservationStatus.Retained &&
             reservation.ExpiresAt <= now &&
             !expirationFailures.Contains(reservationId));
+    }
+
+    public Task<bool> TryExpireRetainedReservationForSeatAsync(
+        Guid eventId,
+        Guid seatId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        SeatExpirationAttempts.Add((eventId, seatId, now));
+        var reservation = expiredReservations.SingleOrDefault(candidate =>
+            candidate.EventId == eventId &&
+            candidate.SeatId == seatId &&
+            candidate.Status == ReservationStatus.Retained &&
+            candidate.ExpiresAt <= now);
+        if (reservation is null || expirationFailures.Contains(reservation.Id))
+        {
+            return Task.FromResult(false);
+        }
+
+        reservation.Status = ReservationStatus.Expired;
+        return Task.FromResult(true);
     }
 
     private static Reservation Clone(Reservation reservation) =>

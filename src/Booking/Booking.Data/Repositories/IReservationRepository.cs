@@ -16,4 +16,10 @@ public interface IReservationRepository
         Guid reservationId,
         DateTimeOffset now,
         CancellationToken cancellationToken = default);
+
+    Task<bool> TryExpireRetainedReservationForSeatAsync(
+        Guid eventId,
+        Guid seatId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default);
 }

@@ -127,6 +127,132 @@ public sealed class ReservationRequestProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenSeatIsBlockedByExpiredRetainedReservation_ExpiresAndRetriesInsert()
+    {
+        var request = CreateRequest();
+        var blockingReservation = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            EventId = request.EventId,
+            SeatId = request.SeatId,
+            Status = ReservationStatus.Retained,
+            ExpiresAt = UtcNow
+        };
+        var repository = new StubReservationRepository();
+        repository.AddExpiredReservation(blockingReservation);
+        repository.EnqueueResult(ReservationInsertResult.SeatTaken());
+        repository.EnqueueResult(ReservationInsertResult.Created());
+        var processor = CreateProcessor(repository);
+
+        var result = await processor.ProcessAsync(request);
+
+        Assert.Equal(ReservationProcessingOutcome.Retained, result.Outcome);
+        Assert.Equal(request.RequestId, result.RequestId);
+        Assert.Equal(2, repository.AttemptedReservations.Count);
+        Assert.All(repository.AttemptedReservations, attemptedReservation =>
+        {
+            Assert.Equal(request.RequestId, attemptedReservation.Id);
+            Assert.Equal(ReservationStatus.Retained, attemptedReservation.Status);
+        });
+        var expirationAttempt = Assert.Single(repository.SeatExpirationAttempts);
+        Assert.Equal(request.EventId, expirationAttempt.EventId);
+        Assert.Equal(request.SeatId, expirationAttempt.SeatId);
+        Assert.Equal(UtcNow, expirationAttempt.Now);
+        Assert.Equal(ReservationStatus.Expired, blockingReservation.Status);
+    }
+
+    [Theory]
+    [InlineData(ReservationStatus.Retained, 1)]
+    [InlineData(ReservationStatus.Confirmed, -1)]
+    public async Task ProcessAsync_WhenBlockingReservationCannotBeExpired_PersistsSeatTaken(
+        ReservationStatus blockingStatus,
+        int expiresInMinutes)
+    {
+        var request = CreateRequest();
+        var blockingReservation = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            EventId = request.EventId,
+            SeatId = request.SeatId,
+            Status = blockingStatus,
+            ExpiresAt = UtcNow.AddMinutes(expiresInMinutes)
+        };
+        var repository = new StubReservationRepository();
+        repository.AddExpiredReservation(blockingReservation);
+        repository.EnqueueResult(ReservationInsertResult.SeatTaken());
+        repository.EnqueueResult(ReservationInsertResult.Created());
+        var processor = CreateProcessor(repository);
+
+        var result = await processor.ProcessAsync(request);
+
+        Assert.Equal(ReservationProcessingOutcome.SeatTaken, result.Outcome);
+        Assert.Equal(2, repository.AttemptedReservations.Count);
+        Assert.Equal(ReservationStatus.Rejected, repository.AttemptedReservations[1].Status);
+        Assert.Single(repository.SeatExpirationAttempts);
+        Assert.Equal(blockingStatus, blockingReservation.Status);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenRetriedInsertStillConflicts_RejectsWithoutAnotherRetainedRetry()
+    {
+        var request = CreateRequest();
+        var blockingReservation = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            EventId = request.EventId,
+            SeatId = request.SeatId,
+            Status = ReservationStatus.Retained,
+            ExpiresAt = UtcNow
+        };
+        var repository = new StubReservationRepository();
+        repository.AddExpiredReservation(blockingReservation);
+        repository.EnqueueResult(ReservationInsertResult.SeatTaken());
+        repository.EnqueueResult(ReservationInsertResult.SeatTaken());
+        repository.EnqueueResult(ReservationInsertResult.Created());
+        var processor = CreateProcessor(repository);
+
+        var result = await processor.ProcessAsync(request);
+
+        Assert.Equal(ReservationProcessingOutcome.SeatTaken, result.Outcome);
+        Assert.Equal(3, repository.AttemptedReservations.Count);
+        Assert.Equal(
+            2,
+            repository.AttemptedReservations.Count(
+                reservation => reservation.Status == ReservationStatus.Retained));
+        Assert.Equal(
+            ReservationStatus.Rejected,
+            repository.AttemptedReservations[2].Status);
+        Assert.Single(repository.SeatExpirationAttempts);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenRetriedInsertFindsSameRequestId_ReturnsDuplicate()
+    {
+        var request = CreateRequest();
+        var blockingReservation = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            EventId = request.EventId,
+            SeatId = request.SeatId,
+            Status = ReservationStatus.Retained,
+            ExpiresAt = UtcNow
+        };
+        var repository = new StubReservationRepository();
+        repository.AddExpiredReservation(blockingReservation);
+        repository.EnqueueResult(ReservationInsertResult.SeatTaken());
+        repository.EnqueueResult(
+            ReservationInsertResult.RequestIdExists(CreateExistingReservation(request)));
+        var processor = CreateProcessor(repository);
+
+        var result = await processor.ProcessAsync(request);
+
+        Assert.Equal(ReservationProcessingOutcome.Duplicate, result.Outcome);
+        Assert.Equal(request.RequestId, result.RequestId);
+        Assert.Equal(2, repository.AttemptedReservations.Count);
+        Assert.Single(repository.SeatExpirationAttempts);
+    }
+
+    [Fact]
     public async Task ProcessAsync_WhenRejectedInsertFindsCompatibleRequest_ReturnsDuplicate()
     {
         var request = CreateRequest();

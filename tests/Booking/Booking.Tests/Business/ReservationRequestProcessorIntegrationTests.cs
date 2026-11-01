@@ -54,6 +54,54 @@ public sealed class ReservationRequestProcessorIntegrationTests(PostgreSqlFixtur
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenSeatIsBlockedByExpiredRetainedReservation_ExpiresItAndCreatesNewReservation()
+    {
+        await fixture.ResetAsync();
+        var eventId = Guid.NewGuid();
+        var seatId = Guid.NewGuid();
+        var expiredReservation = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            SeatId = seatId,
+            Status = ReservationStatus.Retained,
+            ExpiresAt = UtcNow
+        };
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.Add(expiredReservation);
+        await dbContext.SaveChangesAsync();
+
+        var request = new ProcessReservationRequest(Guid.NewGuid(), eventId, seatId);
+        var repository = new ReservationRepository(dbContext);
+        var processor = new ReservationRequestProcessor(
+            repository,
+            Options.Create(new ReservationProcessingOptions
+            {
+                RetentionDuration = TimeSpan.FromMinutes(10)
+            }),
+            new FixedTimeProvider(UtcNow));
+
+        var result = await processor.ProcessAsync(request);
+
+        Assert.Equal(ReservationProcessingOutcome.Retained, result.Outcome);
+        Assert.Equal(request.RequestId, result.RequestId);
+
+        var reservations = await dbContext.Reservations
+            .AsNoTracking()
+            .OrderBy(reservation => reservation.Id)
+            .ToListAsync();
+        Assert.Equal(2, reservations.Count);
+        Assert.Contains(reservations, reservation =>
+            reservation.Id == expiredReservation.Id &&
+            reservation.Status == ReservationStatus.Expired);
+        Assert.Contains(reservations, reservation =>
+            reservation.Id == request.RequestId &&
+            reservation.EventId == eventId &&
+            reservation.SeatId == seatId &&
+            reservation.Status == ReservationStatus.Retained);
+    }
+
+    [Fact]
     public async Task ProcessAsync_WhenManyRequestsCompeteForSameSeat_StoresOneRetainedAndOtherRejections()
     {
         await fixture.ResetAsync();
