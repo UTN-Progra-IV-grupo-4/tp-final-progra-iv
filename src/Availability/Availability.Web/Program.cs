@@ -6,17 +6,17 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-builder.Services.AddControllers();
 builder.Services.AddScoped<IReservationRequestRepository, InMemoryReservationRequestRepository>();
 
-var useRabbitMq = builder.Configuration.GetValue<bool>("Messaging:UseRabbitMq");
+var brokerProvider = builder.Configuration["Broker:Provider"] ?? "ServiceBus";
 builder.Services.AddScoped<IMessagePublisher>(provider =>
 {
-    if (useRabbitMq)
+    if (string.Equals(brokerProvider, "RabbitMq", StringComparison.OrdinalIgnoreCase))
     {
         return new RabbitMqMessagePublisher(provider.GetRequiredService<ILogger<RabbitMqMessagePublisher>>());
     }
 
+    // Temporary placeholder until the real broker implementation is introduced in a dedicated PR.
     return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
 });
 

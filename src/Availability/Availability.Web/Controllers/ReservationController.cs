@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Availability.Web.Application;
 using Availability.Web.Domain;
 using Microsoft.AspNetCore.Mvc;
@@ -22,14 +23,27 @@ public class ReservationController : ControllerBase
     {
         try
         {
-            var reservationRequest = await _handler.HandleAsync(command, cancellationToken);
+            var userId = User.FindFirst("sub")?.Value
+                ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.Identity?.Name;
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                throw new UnauthorizedAccessException("User identifier is missing from the authenticated principal.");
+            }
+
+            var reservationRequest = await _handler.HandleAsync(command, userId, cancellationToken);
 
             return Accepted(new
             {
                 message = "solicitud recibida",
-                reservationId = reservationRequest.Id,
+                requestId = reservationRequest.Id,
                 status = reservationRequest.Status.ToString()
             });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
         }
         catch (InvalidOperationException ex)
         {

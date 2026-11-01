@@ -4,7 +4,7 @@ Este contrato representa la solicitud de reserva de un asiento emitida por `Avai
 
 ## Campos
 
-- `MessageId`: GUID único de la solicitud.
+- `MessageId`: GUID único de la solicitud. Debe usarse también como `ServiceBusMessage.MessageId` del broker para que Booking valide la coincidencia del cuerpo y del mensaje, y lo use como identificador idempotente de la reserva.
 - `CorrelationId`: identificador para rastreo distribuido.
 - `EventId`: identificador único del evento.
 - `SeatId`: identificador único del asiento.
@@ -22,7 +22,7 @@ sequenceDiagram
     A->>B: Publish ReservationRequestMessage
     Note over A,B: MessageId, CorrelationId, EventId, SeatId, UserId, RequestedAt
     B->>C: Deliver ReservationRequestMessage
-    C-->>A: Ack / process result
+    Note over A,C: Result is not sent over the broker; it is queried later via the reservation-status contract.
 ```
 
 ## Modelo C#
