@@ -65,9 +65,12 @@ public sealed class ReservationRequestMessageHandlerTests
             BinaryData.FromString(
                 $$"""
                   {
-                    "requestId": "{{requestId}}",
+                    "messageId": "{{requestId}}",
+                    "correlationId": "test-correlation-id",
                     "eventId": "{{eventId}}",
-                    "seatId": "{{seatId}}"
+                    "seatId": "{{seatId}}",
+                    "userId": "test-user",
+                    "requestedAt": "2026-11-01T12:00:00Z"
                   }
                   """),
             requestId.ToString(),

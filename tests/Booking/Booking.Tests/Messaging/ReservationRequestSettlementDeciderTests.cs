@@ -9,12 +9,13 @@ public sealed class ReservationRequestSettlementDeciderTests
         new()
         {
             ReservationRequestMappingErrorCodes.InvalidJson,
-            ReservationRequestMappingErrorCodes.RequestIdRequired,
+            ReservationRequestMappingErrorCodes.PayloadMessageIdRequired,
             ReservationRequestMappingErrorCodes.EventIdRequired,
             ReservationRequestMappingErrorCodes.SeatIdRequired,
             ReservationRequestMappingErrorCodes.MessageIdRequired,
             ReservationRequestMappingErrorCodes.MessageIdInvalid,
-            ReservationRequestMappingErrorCodes.MessageIdMismatch
+            ReservationRequestMappingErrorCodes.MessageIdMismatch,
+            ReservationRequestMappingErrorCodes.CorrelationIdRequired
         };
 
     [Theory]

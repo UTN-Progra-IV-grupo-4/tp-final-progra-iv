@@ -7,7 +7,7 @@ public sealed class ReservationRequestMapperTests
     private readonly ReservationRequestMapper mapper = new();
 
     [Fact]
-    public void Map_WhenProvisionalMessageIsValid_ReturnsBusinessCommand()
+    public void Map_WhenPr35MessageIsValid_ReturnsBusinessCommand()
     {
         var requestId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
@@ -40,7 +40,7 @@ public sealed class ReservationRequestMapperTests
     }
 
     [Theory]
-    [InlineData("requestId", ReservationRequestMappingErrorCodes.RequestIdRequired)]
+    [InlineData("messageId", ReservationRequestMappingErrorCodes.PayloadMessageIdRequired)]
     [InlineData("eventId", ReservationRequestMappingErrorCodes.EventIdRequired)]
     [InlineData("seatId", ReservationRequestMappingErrorCodes.SeatIdRequired)]
     public void Map_WhenIdentifierIsEmpty_ReturnsExpectedError(
@@ -51,7 +51,7 @@ public sealed class ReservationRequestMapperTests
         var eventId = Guid.NewGuid();
         var seatId = Guid.NewGuid();
 
-        requestId = emptyField == "requestId" ? Guid.Empty : requestId;
+        requestId = emptyField == "messageId" ? Guid.Empty : requestId;
         eventId = emptyField == "eventId" ? Guid.Empty : eventId;
         seatId = emptyField == "seatId" ? Guid.Empty : seatId;
 
@@ -88,7 +88,7 @@ public sealed class ReservationRequestMapperTests
     }
 
     [Fact]
-    public void Map_WhenMessageIdDoesNotMatchRequestId_ReturnsMismatch()
+    public void Map_WhenBrokerMessageIdDoesNotMatchPayloadMessageId_ReturnsMismatch()
     {
         var delivery = CreateDelivery(
             Guid.NewGuid(),
@@ -102,18 +102,39 @@ public sealed class ReservationRequestMapperTests
         Assert.Equal(ReservationRequestMappingErrorCodes.MessageIdMismatch, result.ErrorCode);
     }
 
+    [Fact]
+    public void Map_WhenPayloadCorrelationIdIsMissing_ReturnsRequiredError()
+    {
+        var requestId = Guid.NewGuid();
+        var delivery = CreateDelivery(
+            requestId,
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            requestId.ToString(),
+            correlationId: " ");
+
+        var result = mapper.Map(delivery);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(ReservationRequestMappingErrorCodes.CorrelationIdRequired, result.ErrorCode);
+    }
+
     private static ReservationRequestDelivery CreateDelivery(
         Guid requestId,
         Guid eventId,
         Guid seatId,
-        string? messageId)
+        string? messageId,
+        string correlationId = "test-correlation-id")
     {
         var body = BinaryData.FromString(
             $$"""
               {
-                "requestId": "{{requestId}}",
+                "messageId": "{{requestId}}",
+                "correlationId": "{{correlationId}}",
                 "eventId": "{{eventId}}",
-                "seatId": "{{seatId}}"
+                "seatId": "{{seatId}}",
+                "userId": "test-user",
+                "requestedAt": "2026-11-01T12:00:00Z"
               }
               """);
 
