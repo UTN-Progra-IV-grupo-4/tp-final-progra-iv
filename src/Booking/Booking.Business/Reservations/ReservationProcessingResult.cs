@@ -1,5 +1,3 @@
-using Booking.Data.Models;
-
 namespace Booking.Business.Reservations;
 
 public enum ReservationProcessingOutcome
@@ -22,6 +20,4 @@ public static class ReservationProcessingErrorCodes
 public sealed record ReservationProcessingResult(
     ReservationProcessingOutcome Outcome,
     Guid RequestId,
-    ReservationStatus? CurrentStatus = null,
-    ReservationRejectionReason? RejectionReason = null,
     string? ErrorCode = null);

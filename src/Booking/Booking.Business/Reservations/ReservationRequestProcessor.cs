@@ -59,8 +59,7 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
         {
             ReservationInsertOutcome.Created => new ReservationProcessingResult(
                 ReservationProcessingOutcome.Retained,
-                request.RequestId,
-                ReservationStatus.Retained),
+                request.RequestId),
             ReservationInsertOutcome.RequestIdExists => ResolveExistingRequest(
                 request,
                 RequireExistingReservation(insertResult)),
@@ -94,9 +93,7 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
         {
             ReservationInsertOutcome.Created => new ReservationProcessingResult(
                 ReservationProcessingOutcome.SeatTaken,
-                request.RequestId,
-                ReservationStatus.Rejected,
-                ReservationRejectionReason.SeatTaken),
+                request.RequestId),
             ReservationInsertOutcome.RequestIdExists => ResolveExistingRequest(
                 request,
                 RequireExistingReservation(rejectedInsertResult)),
@@ -117,16 +114,12 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
             return new ReservationProcessingResult(
                 ReservationProcessingOutcome.RequestConflict,
                 request.RequestId,
-                existingReservation.Status,
-                existingReservation.RejectionReason,
                 ReservationProcessingErrorCodes.RequestPayloadConflict);
         }
 
         return new ReservationProcessingResult(
             ReservationProcessingOutcome.Duplicate,
-            request.RequestId,
-            existingReservation.Status,
-            existingReservation.RejectionReason);
+            request.RequestId);
     }
 
     private static Reservation RequireExistingReservation(ReservationInsertResult insertResult) =>
