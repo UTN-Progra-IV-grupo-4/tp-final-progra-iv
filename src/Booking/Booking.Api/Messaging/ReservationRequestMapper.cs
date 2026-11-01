@@ -1,0 +1,77 @@
+using System.Text.Json;
+using Booking.Business.Reservations;
+
+namespace Booking.Api.Messaging;
+
+internal sealed class ReservationRequestMapper
+{
+    public ReservationRequestMappingResult Map(ReservationRequestDelivery delivery)
+    {
+        ArgumentNullException.ThrowIfNull(delivery);
+
+        ProvisionalReservationRequestMessage? message;
+        try
+        {
+            message = delivery.Body.ToObjectFromJson<ProvisionalReservationRequestMessage>();
+        }
+        catch (JsonException)
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.InvalidJson);
+        }
+
+        if (message is null)
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.InvalidJson);
+        }
+
+        if (message.MessageId == Guid.Empty)
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.PayloadMessageIdRequired);
+        }
+
+        if (message.EventId == Guid.Empty)
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.EventIdRequired);
+        }
+
+        if (message.SeatId == Guid.Empty)
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.SeatIdRequired);
+        }
+
+        if (string.IsNullOrWhiteSpace(delivery.MessageId))
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.MessageIdRequired);
+        }
+
+        if (!Guid.TryParse(delivery.MessageId, out var messageId))
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.MessageIdInvalid);
+        }
+
+        if (messageId != message.MessageId)
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.MessageIdMismatch);
+        }
+
+        if (string.IsNullOrWhiteSpace(message.CorrelationId))
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.CorrelationIdRequired);
+        }
+
+        return ReservationRequestMappingResult.Success(
+            new ProcessReservationRequest(
+                message.MessageId,
+                message.EventId,
+                message.SeatId));
+    }
+}
