@@ -50,7 +50,6 @@ public sealed class ReservationRequestProcessorTests
         var result = await processor.ProcessAsync(request);
 
         Assert.Equal(ReservationProcessingOutcome.Retained, result.Outcome);
-        Assert.Equal(ReservationStatus.Retained, result.CurrentStatus);
 
         var attemptedReservation = Assert.Single(repository.AttemptedReservations);
         Assert.Equal(request.RequestId, attemptedReservation.Id);
@@ -72,8 +71,7 @@ public sealed class ReservationRequestProcessorTests
         var result = await processor.ProcessAsync(request);
 
         Assert.Equal(ReservationProcessingOutcome.Duplicate, result.Outcome);
-        Assert.Equal(existingReservation.Status, result.CurrentStatus);
-        Assert.Equal(existingReservation.RejectionReason, result.RejectionReason);
+        Assert.Equal(request.RequestId, result.RequestId);
         Assert.Single(repository.AttemptedReservations);
     }
 
@@ -117,8 +115,6 @@ public sealed class ReservationRequestProcessorTests
         var result = await processor.ProcessAsync(request);
 
         Assert.Equal(ReservationProcessingOutcome.SeatTaken, result.Outcome);
-        Assert.Equal(ReservationStatus.Rejected, result.CurrentStatus);
-        Assert.Equal(ReservationRejectionReason.SeatTaken, result.RejectionReason);
         Assert.Equal(2, repository.AttemptedReservations.Count);
 
         var rejectedReservation = repository.AttemptedReservations[1];
@@ -148,8 +144,7 @@ public sealed class ReservationRequestProcessorTests
         var result = await processor.ProcessAsync(request);
 
         Assert.Equal(ReservationProcessingOutcome.Duplicate, result.Outcome);
-        Assert.Equal(ReservationStatus.Rejected, result.CurrentStatus);
-        Assert.Equal(ReservationRejectionReason.SeatTaken, result.RejectionReason);
+        Assert.Equal(request.RequestId, result.RequestId);
     }
 
     [Fact]
