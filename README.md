@@ -12,10 +12,10 @@ A distributed seat reservation system for events (concerts, conferences, shows).
 |-----------|-----------------------------------------------------------------------------|
 | Retained  | Seat is held while payment is processed. Has an expiration timeout.         |
 | Confirmed | Payment succeeded. Seat is permanently reserved.                            |
-| Rejected  | Reservation failed. Reason recorded: seat taken, payment failed, or payment unavailable. |
+| Rejected  | Reservation failed. Reason: SeatTaken, PaymentFailed, or PaymentUnavailable. |
 | Expired   | Retention time elapsed with no payment result.                              |
 
-A seat is **occupied** while it has a retained or confirmed reservation. Any other state releases the seat.
+A seat is **occupied** while it has a Retained or Confirmed reservation. Any other state releases the seat.
 
 ## Architecture
 
@@ -55,16 +55,71 @@ Message Broker ──────── │
 - Handles expiration of retained reservations
 - **Architecture:** N-Layer, anemic domain
 
+Booking separates its REST entry point (`Booking.Api`), business layer (`Booking.Business`), and persistence (`Booking.Data`). The API is the composition root and registers the business layer, which delegates persistence setup to Data. `Reservation.Id` is the request ID supplied by Availability; `EventId` and `SeatId` have a partial unique index for Retained and Confirmed reservations. Reservation is a data-only model; its EF Core mapping lives in a separate Fluent API configuration, and status and rejection reason enums are stored as text for readable database values.
+
 ### Payment
 - Processes charges for retained reservations via gRPC
 - **Architecture:** N-Layer, anemic domain
 
 ### Notification Service
 - Notifies users when a reservation is created and confirmed after successful payment
+- **Out of implementation scope** (confirmed by the professor): it is only drawn in the architecture diagrams, so it needs no subscription on the broker
 
 ### Authorization Server
 - Issues tokens for authenticated users
 - All inter-service communication is authenticated
+
+## Technical Decisions
+
+Agreed by the team and validated by the professor. Each decision has its own issue with the reasoning and the alternatives.
+
+| Area | Decision | Notes |
+|------|----------|-------|
+| Platform | .NET 10, single solution (`TpFinal.sln`) | Services never reference each other; only `Contracts` is shared |
+| Database | PostgreSQL with Entity Framework Core (Npgsql) | One PostgreSQL container with three logical databases, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
+| Authorization server | Keycloak, running as a container | OIDC for users and client credentials between services ([#5](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)) |
+| Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes; RabbitMQ exists as local fallback profile ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
+| Running everything | Docker Compose, one command | Planned in [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3) |
+
+Secrets, such as the Service Bus connection string, live in a local `.env` file or in `dotnet user-secrets` and are **never committed**: the repository is public. Only `.env.example` with empty values is versioned.
+
+## Local Infrastructure (Docker Compose)
+
+1. Create your local env file from the template:
+
+```bash
+cp .env.example .env
+```
+
+On PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+2. Fill required variables in `.env`.
+
+3. Start core infrastructure (PostgreSQL + Keycloak):
+
+```bash
+docker compose up -d
+```
+
+4. Start infrastructure including RabbitMQ fallback:
+
+```bash
+docker compose --profile rabbitmq up -d
+```
+
+5. Stop and remove containers:
+
+```bash
+docker compose down
+```
+
+> The PostgreSQL init script in `docker/postgres/init-multiple-dbs.sh` only runs when the database volume is empty. If you change DB names, users, or passwords, recreate the database volume with `docker compose down -v` before `docker compose up -d`.
+>
+> Avoid passwords containing a single quote (`'`), because that breaks the SQL script. Use a simple value such as letters, numbers and symbols like `-` or `_`.
 
 ## Reservation Flow
 
@@ -77,17 +132,77 @@ Message Broker ──────── │
 7. **Status check** — User polls Availability → Availability queries Booking.
 8. **Expiration** — If a retained reservation reaches its timeout with no result, it expires and the seat is released.
 
-## Branch Strategy
+## Getting started
 
-Branches follow ticket-based naming (e.g., Jira/Linear):
+Requires the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
 
 ```
-main        → stable, production-ready
-develop     → integration branch
-<TICKET-ID> → one branch per task/ticket
+TpFinal.sln
+src/
+  Availability/Availability.Web        ASP.NET Core MVC site
+  Booking/Booking.Api                  REST API
+  Payment/Payment.Grpc                 gRPC API
+  Contracts/                           .proto files and messages, the only shared project
 ```
 
-Pull requests go from `<TICKET-ID>` → `develop`. Releases merge `develop` → `main`.
+Services never reference each other: they only talk over HTTP, gRPC or the broker, and the only project they may share is `Contracts`.
+
+The Booking API requires a PostgreSQL connection string named `Booking`. In development, set it with User Secrets:
+
+```bash
+dotnet user-secrets set "ConnectionStrings:Booking" "Host=localhost;Database=<BOOKING_DB_NAME>;Username=<BOOKING_DB_USER>;Password=<BOOKING_DB_PASSWORD>" --project src/Booking/Booking.Api
+```
+
+Use the database name, user and password you set in your local `.env` for the Docker Compose PostgreSQL container. In other environments, supply it through the `ConnectionStrings__Booking` environment variable. Never commit credentials or place them in `appsettings.json`.
+
+Create a migration without PostgreSQL running:
+
+```bash
+dotnet ef migrations add InitialCreate --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api --output-dir Migrations
+```
+
+Apply migrations when the PostgreSQL database is accessible. The EF Core tools read the same User Secrets and `ConnectionStrings__Booking` variable as the API:
+
+```bash
+dotnet ef database update --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
+```
+
+```bash
+dotnet build TpFinal.sln
+dotnet run --project src/Booking/Booking.Api
+```
+
+- **Visual Studio**: open `TpFinal.sln`. To run several services at once use *Solution → Configure Startup Projects → Multiple startup projects*.
+- **VS Code**: open the repository folder, install the recommended extensions (C# Dev Kit) and press F5 with the **All services** launch configuration.
+- **Any editor**: the `dotnet` CLI is enough. Code style is shared through `.editorconfig`.
+
+## Workflow
+
+Tasks are tracked as GitHub Issues on the [project board](https://github.com/orgs/UTN-Progra-IV-grupo-4/projects/1) (Backlog → Todo → In Progress → Blocked → Review → Develop → Prod).
+
+### Branches
+
+Branches are named after the issue number:
+
+```
+main                        → stable, production-ready
+develop                     → integration branch
+<issue-number>-short-name   → one branch per issue, created from develop (e.g. 12-availability-base)
+```
+
+Nobody pushes directly to `main` or `develop`: both are protected by a ruleset.
+
+### Pull requests
+
+- Open the PR from `<issue-number>-short-name` into `develop`.
+- The description must include `Closes #<issue-number>` (the PR template already has it).
+- At least **1 approval** from another team member is required, so nobody merges their own PR.
+- Releases merge `develop` → `main`, and the cards are moved to **Prod** by hand.
+
+### Commits
+
+[Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`, for example `feat(booking): consume reservation requests`.
+Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`.
 
 ## Glossary
 
@@ -99,3 +214,19 @@ Pull requests go from `<TICKET-ID>` → `develop`. Releases merge `develop` → 
 | Seat    | Physical place to sit                   |
 | Booking | The rental of a physical seat           |
 | Payment | Finalization of a physical seat rental  |
+
+## Interpretación de componentes
+
+| Componente | Rol | Justificación |
+|------------|-----|--------------|
+| Availability Site | Permite consultar asientos disponibles, solicitar reservas y consultar sus resultados. | Es el punto de entrada del usuario. Recibe las solicitudes y las publica en el broker sin esperar el resultado del procesamiento. |
+| Message Broker (Azure Service Bus) | Gestiona la comunicación asíncrona entre Availability y Booking. | Desacopla los servicios: Availability publica en un topic y las réplicas de Booking consumen de una subscription, de modo que cada solicitud la procesa una sola réplica. |
+| Booking REST API | Gestiona las reservas, controla sus estados y solicita los pagos. | Centraliza las reglas de reserva y debe impedir que dos usuarios reserven simultáneamente el mismo asiento. |
+| Payment gRPC API | Procesa las solicitudes de cobro realizadas por Booking mediante gRPC. | Separa la responsabilidad de los pagos de la gestión de reservas. |
+| Authorization Server (Keycloak) | Gestiona la autenticación y autorización mediante tokens. | Protege las operaciones de reserva (OIDC para los usuarios) y autentica las comunicaciones entre microservicios (client credentials). |
+| Proveedores de identidad de terceros | Permiten integrar la autenticación con proveedores externos. | Facilitan la autenticación de usuarios mediante servicios de identidad externos. |
+| Bases de datos SQL (PostgreSQL) | Almacenan la información correspondiente a cada servicio. | Garantizan la persistencia de solicitudes, reservas y pagos, con una base y un usuario por servicio para mantener separados los datos de los microservicios. |
+| Direcciones IP públicas | Permiten el acceso externo al sitio Availability. | Proporcionan un punto de acceso público para que los usuarios puedan interactuar con el sistema. |
+| Servicio de notificaciones | Informa al usuario cuando su reserva fue creada y cuando fue confirmada después de un pago exitoso. | Desacopla el envío de notificaciones del procesamiento de reservas (punto 3.h del enunciado). No se implementa: solo figura en los diagramas. |
+
+**Nota:** El servicio de notificaciones es una incorporación requerida por el punto 3.h del enunciado y no forma parte del diagrama original de arquitectura.
