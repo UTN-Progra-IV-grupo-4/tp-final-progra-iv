@@ -19,8 +19,14 @@ public class ReservationRequestHandler
 
     public async Task<ReservationRequest> HandleAsync(
         ReservationRequestCommand command,
+        string userId,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new UnauthorizedAccessException("Authenticated user is required to create a reservation request.");
+        }
+
         var seatExists = await _repository.SeatExistsAsync(command.SeatId, command.EventId, cancellationToken);
         if (!seatExists)
         {
@@ -32,7 +38,7 @@ public class ReservationRequestHandler
             Id = Guid.NewGuid(),
             SeatId = command.SeatId,
             EventId = command.EventId,
-            UserId = command.UserId,
+            UserId = userId,
             Status = ReservationRequestStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
