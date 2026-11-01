@@ -8,7 +8,7 @@
 |---|---|
 | Issue | [#18 - Booking: consumir solicitudes de reserva](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/18) |
 | Responsable | Alejandro Galarza |
-| Estado SDD | `IMPLEMENTING` con contrato de entrada `PROVISORIO` |
+| Estado SDD | `CERRADO PROVISIONALMENTE` para el trabajo propio de #18; `T18-G01` y `T18-G02` abiertos |
 | Componentes | Booking.Api, Booking.Business y Booking.Data |
 | Arquitectura | N-Layer, dominio anémico |
 
@@ -99,7 +99,7 @@ Estado: `VALIDADO` por las definiciones actuales de #13, #15, #18, #19 y #22.
 
 ## 6. Contrato de entrada: reglas oficiales y representación provisoria
 
-La revisión del 2026-10-31 distingue las reglas ya cerradas por los tickets de la forma concreta todavía pendiente del contrato de #15.
+La revisión del 2026-10-31 distinguió las reglas cerradas de la representación provisoria. El 2026-11-01 se tomó como candidato concreto el contrato de [PR #35](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/pull/35), aún en revisión y sin integrar en `develop`.
 
 | Regla oficial | Fuente |
 |---|---|
@@ -110,13 +110,16 @@ La revisión del 2026-10-31 distingue las reglas ya cerradas por los tickets de 
 
 Representación de desarrollo: `PROVISORIA`, identificada como `T18-G01`.
 
-El siguiente JSON es solamente la forma candidata usada por Booking.Api; los nombres, casing y presencia de `requestId` en el body no están definidos todavía por #15:
+El modelo privado de Booking.Api replica los campos y el casing del JSON documentado en PR #35. Los valores siguientes son ilustrativos; no son datos reales:
 
 ```json
 {
-  "requestId": "00000000-0000-0000-0000-000000000000",
-  "eventId": "00000000-0000-0000-0000-000000000000",
-  "seatId": "00000000-0000-0000-0000-000000000000"
+  "messageId": "7b2f0c31-9d3a-4a4f-8d2e-0f6b11f5a245",
+  "correlationId": "req-2026-11-01-001",
+  "eventId": "8cc3b719-4866-4f8b-a893-6db7d0f18b55",
+  "seatId": "1cf6fb92-e01e-4d7c-8935-14a42f8fd17a",
+  "userId": "user-42",
+  "requestedAt": "2026-11-01T12:00:00Z"
 }
 ```
 
@@ -124,15 +127,15 @@ Metadata y estado:
 
 | Dato | Regla oficial | Detalle todavía provisorio |
 |---|---|---|
-| `MessageId` | Igual al id de solicitud. | Formato concreto y si `requestId` también aparece en el body. |
-| `CorrelationId` | Debe estar presente y Booking lo conserva. | Ubicación, formato y regla de generación. |
+| `MessageId` | Igual al id de solicitud. | PR #35 lo define como GUID en el body; la asignación a la propiedad homónima de Azure Service Bus sigue pendiente del publicador real. |
+| `CorrelationId` | Debe estar presente y Booking lo conserva. | PR #35 lo define como string en el body; la asignación a metadata de Azure Service Bus sigue pendiente del publicador real. |
 | Tipo de mensaje | Debe estar presente. | Uso de `Subject` u otra propiedad y nombre exacto. |
 
-El modelo vive solamente en `Booking.Api`. No se agrega a `src/Contracts`. Cuando #15 publique el contrato definitivo se reemplazarán el tipo de entrada y el mapper, sin modificar Business ni Data.
+El modelo continúa viviendo solamente en `Booking.Api`; la clase compartida de PR #35 pertenece a #15 y no se duplica en esta rama. Booking mapea `messageId` del body al `RequestId` de Business, verifica su coincidencia con el `MessageId` del broker y exige `correlationId` no vacío en el body. `userId` y `requestedAt` se deserializan, pero #18 no los persiste ni impone reglas adicionales que PR #35 no define. Cuando #15 se integre, se referencia `Contracts.ReservationRequestMessage` y se retira el modelo privado, sin modificar Business ni Data.
 
-Continúan provisorios el formato JSON, clase, namespace, nombres, casing, `Subject` o mecanismo equivalente, ubicación o generación del correlation id y campos adicionales. Como base de desarrollo se rechazan JSON inválidos, identificadores vacíos y diferencias entre `MessageId` y `requestId`; la validación del tipo exacto queda pendiente del contrato de #15.
+Los nombres, casing y campos ya tienen una propuesta concreta en PR #35, sujeta a revisión. El publicador falso del PR usa `JsonSerializer.Serialize` sin opciones y solo registra el resultado en logs; ese resultado tiene propiedades PascalCase y no constituye un mensaje publicado en Azure. Siguen sin definirse el `Subject` o mecanismo equivalente, la serialización efectiva del futuro publicador Azure y la correspondencia de `CorrelationId` entre body y broker. El mapper rechaza JSON inválido, identificadores vacíos, ausencia de `correlationId` en el body y diferencias entre el `MessageId` del body y el broker. La validación del tipo exacto continúa pendiente.
 
-Aunque la presencia de correlation id y tipo ya es una regla oficial, `T18-G01` todavía no rechaza su ausencia porque #15 no definió dónde ni con qué nombre se transportan. Esa validación se agrega al reemplazar el contrato, sin inventar una ubicación provisoria.
+`T18-G01` sigue abierto porque PR #35 aún no está integrado ni tiene un publicador real de Azure Service Bus. La validación de `correlationId` se limita al campo del body documentado por ese PR; todavía no exige la metadata del broker.
 
 ## 7. Diseño por capas
 
@@ -225,7 +228,7 @@ Límite de fases:
 | `T18-RQ-03,04` | `tests/Booking/Booking.Tests/Business/ReservationRequestProcessorIntegrationTests.cs` | Agregado | Concurrencia real aprobada. |
 | `T18-RQ-01,02` | `src/Booking/Booking.Api/Messaging/AzureServiceBusReservationRequestConsumer.cs`, `ReservationRequestConsumerHostedService.cs`, `ReservationRequestMapper.cs` y `ReservationRequestMessageHandler.cs` | Agregado | Ciclo de vida, recepción, mapeo y delegación verificados localmente; F07 confirmó recepción real en una única instancia. |
 | `T18-RQ-08,09` | `src/Booking/Booking.Api/Messaging/ReservationRequestMessageProcessor.cs`, `ReservationRequestSettlementDecider.cs` y `AzureServiceBusReservationRequestMessageSettlement.cs` | Agregado | Settlement, propagación y observabilidad verificados localmente y en la ventana controlada de F07. |
-| `T18-RQ-01,02,08,09` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración, ciclo de vida, settlement, propagación de excepciones y logs seguros verificados dentro de las 48 pruebas de Booking.Tests. |
+| `T18-RQ-01,02,08,09` | `tests/Booking/Booking.Tests/Messaging/` | Agregado | Mapper, scope, configuración, ciclo de vida, settlement, propagación de excepciones y logs seguros verificados dentro de las 50 pruebas actuales de Booking.Tests. |
 
 ## 11. Escenarios de aceptación
 
@@ -263,3 +266,5 @@ Límite de fases:
 - F07 abrió una única instancia durante una ventana autorizada sobre `grupo4-booking-topic/booking`, con PostgreSQL local.
 - Evidencia F07: nueva solicitud `Retained`, duplicado `Duplicate`, conflicto `RequestPayloadConflict`, inválido `InvalidJson`, asiento ocupado `SeatTaken` y reintento con `DeliveryCount` 1–3 antes de completar con `DeliveryCount=4`.
 - El consumer fue detenido al finalizar la ventana y no quedó ninguna instancia activa.
+- El 2026-11-01 se alineó `T18-G01` con los seis campos de PR #35 y se adaptó el emisor auxiliar F07. Build de solución y emisor: 0 errores y 0 advertencias; Booking.Tests: 50 correctas, 0 fallidas y 0 omitidas. No se ejecutó una nueva prueba contra Azure Service Bus con este formato.
+- Más tarde el 2026-11-01 se repitió F07 contra `grupo4-booking-topic/booking` durante una ventana confirmada, con el JSON candidato de PR #35 enviado por `tools/F07Sender`. Se observaron `Retained`, `Duplicate`, `RequestPayloadConflict`, `SeatTaken`, `InvalidJson` y reintento con `DeliveryCount` 1–4. Booking quedó detenido; la subscription terminó con cero mensajes activos y los dos dead-letter anteriores intactos. Se limpiaron únicamente las filas y los dead-letter creados por esta ejecución. La prueba no utilizó el publicador real de Availability.

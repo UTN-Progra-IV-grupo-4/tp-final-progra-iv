@@ -2,6 +2,8 @@
 
 > Material personal de exposición validado por Alejandro el 2026-10-31. Explica el avance de F01 a F07 y conserva como provisorios el contrato y las decisiones técnicas aún no cerradas.
 
+> Actualización del 2026-11-01 incorporada al cierre provisional: el adaptador privado se alineó con el contrato candidato de PR #35; el PR de #15 continúa en revisión.
+
 ## 1. Presentación breve
 
 El ticket #18 implementa el procesamiento asincrónico de solicitudes de reserva en Booking. El problema principal es que varias instancias pueden recibir solicitudes simultáneas para el mismo asiento.
@@ -15,7 +17,7 @@ La solución separa el transporte, el caso de uso y la persistencia:
 
 Los duplicados se controlan mediante `RequestId`, las competencias por asiento mediante un índice único parcial y el mensaje se completa solamente después de persistir un resultado. Los errores determinísticos van a dead-letter y las excepciones se propagan para permitir reintentos.
 
-F03 a F07 están implementadas y verificadas localmente con 48 pruebas y una ventana controlada con Azure Service Bus. El equipo definió una retención de 10 minutos. La integración continúa abierta por el contrato definitivo de #15 y la documentación/cierre final.
+F03 a F07 están implementadas y verificadas con 50 pruebas locales y dos ventanas controladas con Azure Service Bus. La segunda usó el JSON candidato de PR #35 mediante el emisor auxiliar F07. El equipo definió una retención de 10 minutos. La integración continúa abierta por el contrato definitivo y el publicador real de #15.
 
 ## 2. Problema que resuelve
 
@@ -229,7 +231,7 @@ No se registran body, connection strings, claves, tokens, propiedades completas 
 
 ## 11. Evidencia actual
 
-La suite Booking.Tests tiene 48 pruebas correctas, 0 fallidas y 0 omitidas. Cubre:
+La suite Booking.Tests tiene 50 pruebas correctas, 0 fallidas y 0 omitidas después de alinear el mapper con PR #35. Cubre:
 
 - persistencia contra PostgreSQL 16 mediante Testcontainers;
 - inserción libre y RequestId existente;
@@ -241,13 +243,13 @@ La suite Booking.Tests tiene 48 pruebas correctas, 0 fallidas y 0 omitidas. Cubr
 - propagación de excepciones;
 - logs seguros.
 
-La solución compiló con 0 errores y 0 advertencias. La subscription compartida solo se abrió durante la ventana coordinada de F07 y el consumer quedó detenido al finalizar.
+La solución compiló con 0 errores y 0 advertencias. La subscription compartida se abrió solo durante las dos ventanas coordinadas de F07; el consumer quedó detenido al finalizar cada una.
 
 ## 12. Pendientes obligatorios
 
 ### Contrato definitivo de #15
 
-Todavía no existe en `develop`. Por eso el modelo `T18-G01` continúa siendo provisorio y aún no se conocen clase, namespace, JSON, casing, ubicación o generación del correlation id ni representación final del tipo de mensaje.
+PR #35 ya propone `Contracts.ReservationRequestMessage` y un JSON con `messageId`, `correlationId`, `eventId`, `seatId`, `userId` y `requestedAt`. Booking adaptó su modelo privado a esa propuesta, pero la clase aún no existe en `develop` ni es una dependencia de Booking. `T18-G01` continúa abierto. También falta el publicador real de Azure Service Bus y la definición efectiva de metadata y tipo de mensaje.
 
 ### Duración de retención
 
@@ -255,7 +257,7 @@ El equipo definió 10 minutos. Booking lo configura como `ReservationProcessing:
 
 ### Azure Service Bus real
 
-F07 demostró recepción real, `Complete`, `DeadLetter` y reentrega sobre `grupo4-booking-topic/booking` durante una ventana coordinada. La prueba utilizó una única instancia y PostgreSQL local; no demuestra competing consumers entre dos réplicas ni reemplaza el contrato definitivo de #15.
+F07 demostró recepción real, `Complete`, `DeadLetter` y reentrega sobre `grupo4-booking-topic/booking` en dos ventanas coordinadas. La repetición usó el JSON candidato de PR #35. Ambas pruebas utilizaron una única instancia y PostgreSQL local; no demuestran competing consumers entre dos réplicas ni el publicador real de #15.
 
 ## 13. Preguntas probables y respuestas breves
 
@@ -319,9 +321,9 @@ Porque EF Core continúa siguiéndolas después de `SaveChanges` fallido y podr�
 
 No. El modelo actual está aislado en Booking.Api y se reemplazará por el contrato de #15 sin cambiar Business ni Data.
 
-### ¿Por qué todavía no se exige correlation id y tipo?
+### ¿Por qué el tipo de mensaje y la metadata de correlación siguen pendientes?
 
-La obligación es oficial, pero #15 aún no definió dónde se transportan ni sus nombres concretos. Validarlos ahora inventaría un contrato paralelo.
+El JSON candidato de PR #35 incluye `correlationId` y Booking exige que no esté vacío en el body. Falta comprobar cómo el publicador real de #15 asignará la metadata `CorrelationId` de Azure Service Bus y qué propiedad representará el tipo de mensaje.
 
 ### ¿Cuánto dura una retención?
 
@@ -329,10 +331,10 @@ Dura 10 minutos por decisión del equipo. La duración permanece configurable y 
 
 ### ¿Cómo se demostró el comportamiento?
 
-Con 48 pruebas y una ventana controlada de Azure Service Bus. Se observaron `Retained`, `Duplicate`, `SeatTaken`, `DeadLetter` por errores determinísticos y reentrega por excepción. La validación de múltiples réplicas y el contrato definitivo de #15 continúan pendientes.
+Con 50 pruebas locales y dos ventanas controladas de Azure Service Bus. En la segunda, con el JSON candidato de PR #35, se observaron `Retained`, `Duplicate`, `SeatTaken`, `DeadLetter` por conflicto y JSON inválido, y reentrega tras una caída temporal de PostgreSQL. Quedan pendientes el publicador real de #15, el reemplazo del modelo privado y, si el equipo lo requiere, la validación de dos réplicas.
 
 ## 14. Cierre sugerido
 
 La implementación local resuelve concurrencia, idempotencia y procesamiento seguro. PostgreSQL garantiza una sola reserva activa por asiento, RequestId garantiza idempotencia y el settlement ocurre después de persistir.
 
-El ticket todavía no está cerrado: falta integrar el contrato oficial de #15, completar F08 y ejecutar F09.
+Alejandro aceptó el cierre provisional de su trabajo de #18 para avanzar con otros tickets. F08 y F09 se completaron para ese cierre y PR #34 permanece abierto. El cierre definitivo requiere integrar el contrato aprobado de #15, retirar `T18-G01` y resolver los detalles de `T18-G02`; el issue #18 sigue abierto y el PR no está mergeado.

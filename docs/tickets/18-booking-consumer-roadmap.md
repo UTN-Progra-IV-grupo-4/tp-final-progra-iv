@@ -9,7 +9,7 @@
 | Responsable | Alejandro Galarza |
 | Componente | Booking |
 | Arquitectura | N-Layer, dominio anémico |
-| Estado general | `EN_CURSO` |
+| Estado general | `CERRADO PROVISIONALMENTE` para el trabajo propio de #18; issue #18 y PR #34 abiertos, sin merge |
 
 ## 2. Fuentes de verdad
 
@@ -72,7 +72,7 @@ Fuera del alcance de T18:
 - `Reservation.Id` es la clave primaria y representa el id de solicitud.
 - Existe un índice único parcial sobre `(EventId, SeatId)` para `Retained` y `Confirmed`.
 - La rama contiene F03 a F07 implementados y verificados localmente; F05 y F06 continúan parciales por los contratos y decisiones provisorias.
-- El consumer permanece deshabilitado por configuración; F07 utilizó la subscription compartida únicamente durante una ventana autorizada.
+- El consumer permanece deshabilitado por configuración; F07 utilizó la subscription compartida únicamente durante dos ventanas autorizadas, la segunda con el JSON candidato de PR #35.
 
 ## 5. Decisiones técnicas
 
@@ -143,9 +143,9 @@ Estas cuatro relaciones fueron validadas expresamente por Alejandro el 2026-10-3
 
 ### T18-B01 - Contrato compartido de #15
 
-Estado: `BLOQUEADO` para cerrar la integración final, reemplazado provisoriamente por `T18-G01` durante el desarrollo.
+Estado: `PARCIAL`: PR #35 propone la clase y el JSON compartidos; continúa en revisión y aún no está integrado en `develop`. `T18-G01` sigue siendo necesario hasta entonces.
 
-La revisión actual confirmó que `docs/contracts/reservation-request.md` no existe en `develop` y `src/Contracts` todavía no contiene la clase de solicitud. No se debe crear un contrato paralelo. Hasta que #15 se integre, se conserva el comando interno y se adapta el contrato después.
+La revisión del 2026-11-01 confirmó que PR #35 agrega `src/Contracts/ReservationRequestMessage.cs` y `docs/contracts/reservation-request.md` en la rama de #15, pero todavía no están en `develop`. Booking alinea su adaptador privado con esos archivos sin copiarlos a esta rama. El publicador de Azure Service Bus aún no figura en ese PR.
 
 ### T18-B02 - Duración de la retención
 
@@ -170,15 +170,18 @@ Reglas ya oficiales que `T18-G01` respeta:
 - `MessageId` igual al id de solicitud.
 - Presencia de correlation id y tipo de mensaje.
 
-`T18-G01` conserva el correlation id cuando llega, pero todavía no rechaza su ausencia ni valida el tipo: #15 debe definir primero su ubicación y nombre exactos.
+Desde el 2026-11-01, `T18-G01` replica la propuesta de PR #35 y exige `correlationId` en el body. No exige aún la propiedad de metadata del broker ni valida el tipo, pues el publicador real de #15 todavía no los define.
 
-Contrato candidato mínimo:
+JSON candidato documentado en PR #35:
 
 ```json
 {
-  "requestId": "00000000-0000-0000-0000-000000000000",
-  "eventId": "00000000-0000-0000-0000-000000000000",
-  "seatId": "00000000-0000-0000-0000-000000000000"
+  "messageId": "7b2f0c31-9d3a-4a4f-8d2e-0f6b11f5a245",
+  "correlationId": "req-2026-11-01-001",
+  "eventId": "8cc3b719-4866-4f8b-a893-6db7d0f18b55",
+  "seatId": "1cf6fb92-e01e-4d7c-8935-14a42f8fd17a",
+  "userId": "user-42",
+  "requestedAt": "2026-11-01T12:00:00Z"
 }
 ```
 
@@ -186,17 +189,16 @@ Metadata del broker:
 
 | Dato | Definición oficial | Detalle provisorio |
 |---|---|---|
-| `MessageId` | Igual al id de solicitud. | Formato y presencia adicional de `requestId` en el body. |
-| `CorrelationId` | Debe existir y Booking lo conserva. | Ubicación, formato y generación. |
+| `MessageId` | Igual al id de solicitud. | PR #35 lo define en el body; falta confirmar la propiedad del broker en el publicador real. |
+| `CorrelationId` | Debe existir y Booking lo conserva. | PR #35 lo define en el body; falta confirmar la propiedad del broker en el publicador real. |
 | Tipo | Debe existir. | `Subject` u otra propiedad y nombre exacto. |
 
-Puntos que #15 puede modificar:
+Puntos todavía sujetos a revisión o implementación de #15:
 
-- Nombres y casing de las propiedades JSON.
-- Presencia de `requestId` dentro del cuerpo o solamente en `MessageId`.
-- Clase, namespace, formato JSON y nombre exacto de `Subject` o mecanismo equivalente.
-- Ubicación, formato y regla de generación de `CorrelationId`.
-- Campos adicionales del productor.
+- Aprobación de la clase, namespace y JSON de PR #35.
+- Serialización efectiva del publicador Azure Service Bus.
+- Correspondencia de `MessageId` y `CorrelationId` del body con la metadata del broker.
+- Nombre exacto de `Subject` o mecanismo equivalente para el tipo de mensaje.
 
 Límite de impacto:
 
@@ -230,11 +232,11 @@ Este gap reúne decisiones necesarias para implementar F05 y F06 que todavía no
 | Settlement | Procesamiento manual, inicialmente con `AutoCompleteMessages = false`. | Probar en F06 `Complete`, `DeadLetter` y reintento para cada resultado. |
 | Dependencias | Un scope por mensaje; Business y Data se resuelven dentro del scope y no se comparte `DbContext`. | Confirmar lifetimes y concurrencia con pruebas. |
 | Configuración | Usar `Broker:Provider` y `Broker:AzureServiceBus:{ConnectionString,TopicName,SubscriptionName}`; nunca versionar la connection string. | Ajustar si el equipo adopta otra estructura. |
-| Mapper | Validar JSON, identificadores y coherencia entre `MessageId` y `requestId`; no validar todavía el nombre exacto de `Subject`. | Reemplazar las reglas dependientes del mensaje cuando cierre #15. |
+| Mapper | Validar JSON, identificadores y coherencia entre `messageId` del body y `MessageId` del broker; exigir `correlationId` en el body, sin validar todavía `Subject`. | Sustituir el modelo privado por `Contracts.ReservationRequestMessage` cuando se integre #15. |
 | Ajustes del SDK | Concurrencia, prefetch, renovación de lock y límites de reintento sin valores definitivos. | Definir con pruebas o acuerdo del equipo. |
 | Smoke test | No consumir la subscription compartida sin autorización explícita y control del mensaje de prueba. | Coordinar la prueba o usar un recurso aislado. |
 
-F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y delegación a Business. F06 cubre settlement, retries, dead-letter y observabilidad local. F07 confirmó esas rutas contra Azure durante una ventana autorizada; el consumer permanece deshabilitado por defecto.
+F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y delegación a Business. F06 cubre settlement, retries, dead-letter y observabilidad local. F07 confirmó esas rutas contra Azure durante dos ventanas autorizadas; el consumer permanece deshabilitado por defecto.
 
 ## 8. Fases de desarrollo
 
@@ -245,11 +247,11 @@ F05 cubre configuración, ciclo de vida, recepción, deserialización, mapeo y d
 | `T18-F02` Contratos y configuración | `PROVISORIO` | Avanzar con `T18-G01`, integrar el contrato de #15 cuando exista y usar la retención validada de 10 minutos. | `T18-B02` cerrado; el gap del contrato queda aislado y debe reemplazarse sin afectar Business/Data. |
 | `T18-F03` Data | `VALIDADO` | Implementar consultas e inserciones race-safe. | Distingue creado, duplicado y asiento ocupado. |
 | `T18-F04` Business | `VALIDADO` | Implementar el caso de uso independiente del broker. | Produce `Retained`, `Rejected/SeatTaken` o idempotente. |
-| `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente y en una ventana controlada; el contrato definitivo de #15 sigue pendiente. |
+| `T18-F05` Consumer | `PARCIAL` | Integrar Azure Service Bus en Booking.Api mediante `T18-G01` y `T18-G02`. | Implementado y verificado localmente y en dos ventanas controladas; el contrato definitivo de #15 sigue pendiente. |
 | `T18-F06` Settlement y observabilidad local | `PARCIAL` | Completar, reintentar o dead-letter y generar logs locales. | Matriz verificada localmente y contra Azure; las decisiones técnicas siguen bajo `T18-G02`. |
 | `T18-F07` Pruebas | `VALIDADO` | Ejecutar la aceptación formal y el smoke test controlado; reutilizar la evidencia local producida por F03 a F06. | Casos reales de éxito, duplicado, conflicto, inválido, asiento ocupado y reintento documentados. |
-| `T18-F08` Documentación y defensa | `EN_CURSO` | Completar la guía de ejecución, diagramas y argumentos a partir de la documentación personal existente. | Registrar evidencia de F07, protocolo y defensa final. |
-| `T18-F09` Cierre | `PENDIENTE` | Revisar diff, compilar y preparar PR. | Checklist completo y PR hacia `develop`. |
+| `T18-F08` Documentación y defensa | `VALIDADO` | Completar la guía de ejecución, diagramas y argumentos a partir de la documentación personal existente. | Documentación final registrada en `e117a00`; esta actualización agrega la repetición de F07. |
+| `T18-F09` Cierre | `VALIDADO PROVISIONAL` | Revisar diff, compilar y preparar PR. | PR #34 abierto y revisable; cierre provisional aceptado por Alejandro con `T18-G01` y `T18-G02` abiertos. |
 
 ## 9. Plan de cambios por raíz
 
@@ -322,7 +324,7 @@ tp-final-progra-iv/
 ├── tools/
 │   └── F07Sender/                              T18-F07 smoke test manual
 │       ├── F07Sender.csproj
-│       ├── Program.cs                          solo emisor; sin receiver
+│       ├── Program.cs                          emisor, inspección y limpieza selectiva de F07
 │       └── README.md                            variables, escenarios y advertencias
 │
 ├── tests/
@@ -350,7 +352,7 @@ tp-final-progra-iv/
 
 ### T18-C01 - Seguimiento y diseño
 
-Estado: `EN_CURSO`.
+Estado: `VALIDADO` para la hoja de ruta y el diseño inicial; se mantiene para el seguimiento personal de los gaps.
 
 - Agrega la plantilla y esta hoja de ruta.
 - No modifica código ejecutable.
@@ -380,7 +382,7 @@ Estado: `VALIDADO`.
 
 ### T18-C04 - Adaptador de Azure Service Bus
 
-Estado: `PARCIAL`. F05 y F06 están implementados y verificados localmente y mediante una ventana controlada; el reemplazo de `T18-G01` continúa pendiente.
+Estado: `PARCIAL`. F05 y F06 están implementados y verificados localmente y mediante dos ventanas controladas; el reemplazo de `T18-G01` continúa pendiente.
 
 - Agrega el SDK y la configuración del broker en Booking.Api.
 - Agrega el ciclo de vida provisorio del consumer según `T18-G02`.
@@ -391,7 +393,7 @@ Estado: `PARCIAL`. F05 y F06 están implementados y verificados localmente y med
 
 ### T18-C05 - Reemplazo por el contrato de #15
 
-Estado: `BLOQUEADO`.
+Estado: `BLOQUEADO` para la integración definitiva; el modelo privado ya refleja el JSON candidato de PR #35.
 
 - Agrega la referencia de Booking.Api a `Contracts` cuando #15 esté en `develop`.
 - Reemplaza y elimina `ProvisionalReservationRequestMessage.cs`.
@@ -401,7 +403,7 @@ Estado: `BLOQUEADO`.
 
 ### T18-C06 - Pruebas, documentación y cierre
 
-Estado: `EN_CURSO`. Las pruebas locales y controladas de F03 a F07 están registradas; F08 y F09 continúan pendientes.
+Estado: `VALIDADO PROVISIONAL`. Las pruebas locales y las dos ventanas controladas de F07 están registradas. F08 quedó documentada en `e117a00` y F09 permitió abrir PR #34 como cierre provisional; la integración definitiva permanece en `T18-C05`.
 
 - Completa pruebas unitarias e integración local en `Booking.Tests`; el smoke test real se ejecuta manualmente con `tools/F07Sender`.
 - Actualiza la documentación personal, la hoja de ruta, la evidencia y la defensa oral.
@@ -712,11 +714,34 @@ Restricciones permanentes para T18:
 ### T18-F08-P08 - Actualizar documentación final después de F07
 
 - Fecha: 2026-10-31
-- Estado: `EN_CURSO`
+- Estado: `VALIDADO` para el cierre provisional; documentación final registrada en `e117a00`.
 - Prompt: “Avancemos con F08. Auditemos la documentación personal, el mapa de archivos, las evidencias y la defensa oral después de la validación controlada de F07, sin modificar código productivo”.
 - Contexto: F07 ya está validado contra Azure Service Bus con PostgreSQL local; la documentación todavía contenía referencias históricas que indicaban que la prueba real estaba pendiente.
-- Respuesta parcial (`T18-F08-R08`): se actualizaron SPEC, IMPLEMENTATION-LOG, roadmap y ORAL-DEFENSE para reflejar F07, mantener abiertos `T18-G01`/`T18-G02` y separar pruebas automatizadas de smoke test manual.
-- Próximo paso: revisar el diff documental y preparar F09 sin realizar push ni cerrar el PR todavía.
+- Respuesta clave (`T18-F08-R08`): se actualizaron SPEC, IMPLEMENTATION-LOG, roadmap y ORAL-DEFENSE para reflejar F07, mantener abiertos `T18-G01`/`T18-G02` y separar pruebas automatizadas de smoke test manual. El commit `e117a00` completó F08 para el cierre provisional.
+
+### T18-F02-P05 - Alinear el modelo privado con el contrato candidato de #15
+
+- Fecha: 2026-11-01
+- Estado: `VALIDADO` por Alejandro al incorporar el bloque en sus commits locales.
+- Prompt real: “usemos el que se encuentra en el pr del bnranch 15. si bien se esta analizando el pr para aprobarlo, este alinea el contrato provisional, a algo mas concreto”.
+- Contexto: PR #35 estaba abierto y proponía `Contracts.ReservationRequestMessage` con seis campos y un ejemplo JSON camelCase; la clase todavía no estaba en `develop` y el publicador de Azure Service Bus no figuraba en el PR.
+- Respuesta clave (`T18-F02-R05`): el modelo privado, mapper, pruebas y emisor auxiliar se alinearon con ese JSON sin copiar el contrato compartido de #15 a la rama #18. Build de solución y emisor sin errores; Booking.Tests 50/50. `T18-G01` permanece abierto.
+
+### T18-F07-P02 - Repetir la validación controlada con el JSON candidato
+
+- Fecha: 2026-11-01
+- Estado: `VALIDADO` por Alejandro al incorporar la evidencia y el bloque en sus commits locales.
+- Prompt real: “el f07 se debe repetir. realicemos esta prueba”.
+- Contexto: Alejandro confirmó una nueva ventana sin otros consumidores. PostgreSQL local estaba activo; la inspección previa mostró cero mensajes activos y dos dead-letter antiguos en `grupo4-booking-topic/booking`.
+- Respuesta clave (`T18-F07-R02`): con una instancia de Booking y `tools/F07Sender` se verificaron `Retained`, `Duplicate`, `RequestPayloadConflict`, `SeatTaken`, `InvalidJson` y reintento con `DeliveryCount` 1–4. Se detuvo Booking, se eliminaron solo las filas y dead-letter de esta ejecución y se preservaron los dos mensajes anteriores. No participó el publicador real de Availability.
+
+### T18-F08-P09 - Revisar diff y estado documental del cierre provisional
+
+- Fecha: 2026-11-01
+- Estado: `VALIDADO`; diff revisado técnicamente y luego incorporado por Alejandro en sus commits locales.
+- Prompt real: “revisar el diff de este bloque y, si lo validamos, registrar el prompt y su contexto antes de preparar los commits. y la documentacion, da por cerrado el 18 entiendo no?”.
+- Contexto: el diff acumulado contenía la alineación de `T18-G01` con PR #35, la repetición F07 y sus evidencias. PR #34 y el issue #18 seguían abiertos; PR #34 ya describía F08 y F09 como completados para un cierre provisional, mientras esta hoja de ruta aún los mostraba pendientes.
+- Respuesta clave (`T18-F08-R09`): se corrigieron los estados actuales a cierre provisional del trabajo propio, se mantuvieron `T18-G01`/`T18-G02` y `T18-V09` abiertos, y se corrigió la descripción del emisor auxiliar: la inspección y limpieza usan un receiver temporal. El cierre definitivo, el merge y el cierre del issue no se declaran realizados.
 
 ## 12. Prompts previstos
 
@@ -750,6 +775,8 @@ Resultado esperado (`T18-F09-R01`): PR revisable, sin secretos y con criterios d
 | `T18-V10` | `VALIDADO LOCAL` | `RequestConflict` e `InvalidRequest` producen dead-letter con códigos estables. |
 | `T18-V11` | `VALIDADO LOCAL` | Configuración `00:10:00`, cálculo UTC a diez minutos y 48/48 pruebas. |
 | `T18-V12` | `VALIDADO` | F07 contra `grupo4-booking-topic/booking`: `Retained`, `Duplicate`, `RequestPayloadConflict`, `InvalidJson`, `SeatTaken` y reintento con `DeliveryCount` 1–4; consumer detenido al finalizar. |
+| `T18-V13` | `VALIDADO LOCAL` | Modelo y mapper privados alineados con el JSON de PR #35; Booking.Tests 50/50, build de solución y F07Sender sin errores ni advertencias. Sin nueva prueba con Azure. |
+| `T18-V14` | `VALIDADO CONTROLADO` | F07 repetida el 2026-11-01 con el JSON candidato de PR #35: `Retained`, `Duplicate`, `RequestPayloadConflict`, `SeatTaken`, `InvalidJson` y reintento con `DeliveryCount` 1–4. Una instancia, PostgreSQL local, limpieza selectiva y subscription sin mensajes activos al finalizar. |
 
 ## 14. Guion de defensa oral
 
@@ -764,7 +791,7 @@ La explicación debe seguir siempre este orden:
 7. Consistencia eventual: Availability responde antes de que Booking termine.
 8. Evidencia: pruebas concurrentes, logs y estado final de la base.
 
-## 15. Definición de terminado de T18
+## 15. Definición de cierre definitivo de T18
 
 - Consumer compatible con múltiples réplicas.
 - Contrato compartido de #15 utilizado sin duplicación.
@@ -779,3 +806,13 @@ La explicación debe seguir siempre este orden:
 - No hay secretos versionados.
 - El responsable puede defender decisiones y tradeoffs.
 - `T18-G01` fue eliminado y no queda ningún contrato provisorio en producción.
+
+El cierre provisional aceptado por Alejandro permite avanzar con otros tickets mientras #15 se revisa. No equivale al cierre del issue en GitHub, al merge de PR #34 ni al cumplimiento de `T18-V09`.
+
+## 16. Seguimiento del contrato candidato de PR #35
+
+Estado al 2026-11-01: PR #35 está abierto y en revisión. Se usan sus campos y ejemplo JSON como referencia concreta para `T18-G01`, sin declarar aprobado el contrato ni copiar a esta rama el archivo compartido de #15. El cambio local se limita al modelo privado y mapper de `Booking.Api`, sus pruebas y el emisor auxiliar F07; `Booking.Business` y `Booking.Data` permanecen intactos.
+
+Para cerrar `T18-V09` falta integrar #15 en `develop`, referenciar `Contracts.ReservationRequestMessage`, eliminar el modelo privado, confirmar metadata y tipo del mensaje en el publicador Azure y verificar un mensaje real con el contrato integrado. El diff de este bloque fue revisado e incorporado en los commits locales de Alejandro; sus prompts quedaron registrados como validados para el seguimiento personal.
+
+La repetición controlada de F07 con `tools/F07Sender` ya validó el JSON candidato contra el consumer de Booking. Esa evidencia no cubre el publicador real de Availability ni cambia el estado de `T18-G01`. El registro de implementación contiene IDs, resultados y limpieza; el prompt de la repetición quedó validado para este bloque personal.

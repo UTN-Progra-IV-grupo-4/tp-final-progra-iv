@@ -331,3 +331,37 @@ Ejecutar la revisión de F07 y preparar una prueba controlada que demuestre el f
 ### Estado
 
 `EN_CURSO` para `T18-F08`: la guía y la defensa están alineadas con F07; resta la revisión final del diff documental y la preparación del cierre F09.
+
+## 2026-11-01 - Alineación provisional con PR #35 de #15
+
+- Se revisó PR #35 en estado abierto, con clase y ejemplo JSON en la rama `15-request-seat-reservation`.
+- El modelo privado de `Booking.Api` ahora refleja los seis campos del PR: `MessageId`, `CorrelationId`, `EventId`, `SeatId`, `UserId` y `RequestedAt`.
+- El mapper usa el `MessageId` del body como `RequestId`, comprueba su igualdad con el `MessageId` del broker y exige `CorrelationId` no vacío en el body. `UserId` y `RequestedAt` se deserializan sin asignarles nuevas reglas de negocio.
+- Se actualizaron las pruebas de mapper y delegación y el emisor auxiliar `tools/F07Sender`. El consumer permanece deshabilitado por defecto.
+- `dotnet build TpFinal.sln --no-restore -p:UseSharedCompilation=false`: 0 errores, 0 advertencias.
+- `dotnet test tests/Booking/Booking.Tests/Booking.Tests.csproj --no-restore -p:UseSharedCompilation=false`: 50 correctas, 0 fallidas, 0 omitidas.
+- `dotnet build tools/F07Sender/F07Sender.csproj --no-restore -p:UseSharedCompilation=false`: 0 errores, 0 advertencias. No se enviaron mensajes a Azure Service Bus.
+- `T18-G01` sigue abierto hasta integrar el contrato compartido desde `develop`. PR #35 todavía no incluye el publicador real de Azure Service Bus ni fija la metadata o el tipo del mensaje.
+
+Estado: alineación revisada e incorporada en los commits locales separados de implementación, pruebas y documentación. El prompt y su contexto quedaron registrados en la hoja de ruta.
+
+## 2026-11-01 - Repetición controlada de F07 con el JSON de PR #35
+
+- Alejandro confirmó una nueva ventana libre sobre `grupo4-booking-topic/booking`. La inspección previa encontró cero mensajes activos y dos mensajes antiguos en dead-letter; se identificaron sin consumirlos.
+- Se ejecutó una única instancia temporal de Booking.Api con el consumer habilitado por variable de entorno. PostgreSQL local estuvo disponible salvo durante el caso de reintento.
+- El emisor auxiliar publicó el JSON candidato de PR #35: `messageId`, `correlationId`, `eventId`, `seatId`, `userId` y `requestedAt`, con metadata `MessageId` y `CorrelationId` coincidente. No se ejecutó el publicador de Availability.
+
+| Caso | Evidencia de logs y base local | Settlement |
+|---|---|---|
+| Solicitud nueva | `2422054d-691f-492d-b39d-8720723fe864` → `Retained`; fila creada. | `Complete` |
+| Duplicado compatible | Mismo `MessageId`, evento y asiento → `Duplicate`; una sola fila para el ID. | `Complete` |
+| ID conflictivo | Mismo `MessageId` con otro asiento → `RequestPayloadConflict`; no cambió la fila original. | `DeadLetter` |
+| Asiento ocupado | `c316e8e9-531a-4718-accf-dbdec098098d` → `Rejected/SeatTaken`; fila verificada. | `Complete` |
+| JSON inválido | `197489b1-87e5-456e-a387-91325cf0d7d5` → `InvalidJson`; sin fila. | `DeadLetter` |
+| Error transitorio | `582622cd-e3ac-4601-a861-83c27b4e955c`: PostgreSQL detenido, fallos en `DeliveryCount` 1–3; al restaurarlo, entrega 4 → `Retained`; fila verificada. | `Complete` |
+
+- El contenedor PostgreSQL quedó activo. Se detuvo la instancia temporal de Booking y se confirmó que el puerto local de la API ya no escuchaba.
+- Se eliminaron exactamente las tres filas locales creadas por esta ejecución y los dos mensajes dead-letter de esta ejecución. La inspección final encontró cero mensajes activos y los mismos dos mensajes dead-letter anteriores, intactos.
+- Esta repetición valida el consumer de Booking con el JSON candidato y el emisor auxiliar. No prueba aún la serialización ni la metadata del publicador real de #15; `T18-G01` continúa abierto.
+
+Estado: F07 repetida satisfactoriamente para el contrato candidato de PR #35. Evidencia y documentación incorporadas en los commits locales; prompt y contexto validados en la hoja de ruta.
