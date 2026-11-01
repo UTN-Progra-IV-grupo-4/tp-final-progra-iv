@@ -160,7 +160,7 @@ Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`
 | Componente | Rol | Justificación |
 |------------|-----|--------------|
 | Availability Site | Permite consultar asientos disponibles, solicitar reservas y consultar sus resultados. | Es el punto de entrada del usuario. Recibe las solicitudes y las publica en el broker sin esperar el resultado del procesamiento. |
-Message Broker (Azure Service Bus) | Gestiona la comunicación asíncrona entre Availability y Booking. | Desacopla los servicios: Availability publica en un topic y las réplicas de Booking consumen de una subscription, de modo que cada solicitud la procesa una sola réplica. |
+| Message Broker (Azure Service Bus) | Gestiona la comunicación asíncrona entre Availability y Booking. | Desacopla los servicios: Availability publica en un topic y las réplicas de Booking consumen de una subscription, de modo que cada solicitud la procesa una sola réplica. |
 | Booking REST API | Gestiona las reservas, controla sus estados y solicita los pagos. | Centraliza las reglas de reserva y debe impedir que dos usuarios reserven simultáneamente el mismo asiento. |
 | Payment gRPC API | Procesa las solicitudes de cobro realizadas por Booking mediante gRPC. | Separa la responsabilidad de los pagos de la gestión de reservas. |
 | Authorization Server (Keycloak) | Gestiona la autenticación y autorización mediante tokens. | Protege las operaciones de reserva (OIDC para los usuarios) y autentica las comunicaciones entre microservicios (client credentials). |
