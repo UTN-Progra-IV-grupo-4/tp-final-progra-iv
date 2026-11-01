@@ -63,9 +63,12 @@ Message Broker ──────── │
 - Notifies users when a reservation is created and confirmed after successful payment
 - **Out of implementation scope** (confirmed by the professor): it is only drawn in the architecture diagrams, so it needs no subscription on the broker
 
-### Authorization Server
-- Issues tokens for authenticated users
-- All inter-service communication is authenticated
+### Authorization Server (Keycloak)
+- Issues tokens for authenticated users via OpenID Connect (OIDC)
+- Supports Client Credentials flow for inter-service authentication
+- Manages users, roles, and OAuth clients
+- **Configuration:** Realm export in `infra/keycloak/realm-export.json`
+- **Documentation:** See [infra/keycloak/README.md](infra/keycloak/README.md) and [docs/INTEGRACION_KEYCLOAK.md](docs/INTEGRACION_KEYCLOAK.md)
 
 ## Technical Decisions
 
@@ -94,7 +97,7 @@ Secrets, such as the Service Bus connection string, live in a local `.env` file 
 
 ## Getting started
 
-Requires the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
+Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
 
 ```
 TpFinal.sln
@@ -103,9 +106,34 @@ src/
   Booking/Booking.Api                  REST API
   Payment/Payment.Grpc                 gRPC API
   Contracts/                           .proto files and messages, the only shared project
+infra/
+  keycloak/                            Keycloak configuration and realm export
+docker/
+  postgres/                            PostgreSQL initialization scripts
 ```
 
 Services never reference each other: they only talk over HTTP, gRPC or the broker, and the only project they may share is `Contracts`.
+
+### Running Keycloak
+
+```bash
+# Copy environment variables
+cp .env.example .env
+
+# Start Keycloak container
+docker compose up keycloak -d
+
+# Verify it's running
+curl http://localhost:8080/health/ready
+
+# Access admin console
+# URL: http://localhost:8080/admin
+# User: admin / admin
+```
+
+See [infra/keycloak/README.md](infra/keycloak/README.md) for detailed Keycloak configuration.
+
+### Running the .NET services
 
 ```bash
 dotnet build TpFinal.sln
