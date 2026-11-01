@@ -5,12 +5,13 @@ namespace Booking.Api.Messaging;
 internal static class ReservationRequestMappingErrorCodes
 {
     public const string InvalidJson = "InvalidJson";
-    public const string RequestIdRequired = "RequestIdRequired";
+    public const string PayloadMessageIdRequired = "PayloadMessageIdRequired";
     public const string EventIdRequired = "EventIdRequired";
     public const string SeatIdRequired = "SeatIdRequired";
     public const string MessageIdRequired = "MessageIdRequired";
     public const string MessageIdInvalid = "MessageIdInvalid";
     public const string MessageIdMismatch = "MessageIdMismatch";
+    public const string CorrelationIdRequired = "CorrelationIdRequired";
 }
 
 internal sealed record ReservationRequestMappingResult(

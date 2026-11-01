@@ -26,10 +26,10 @@ internal sealed class ReservationRequestMapper
                 ReservationRequestMappingErrorCodes.InvalidJson);
         }
 
-        if (message.RequestId == Guid.Empty)
+        if (message.MessageId == Guid.Empty)
         {
             return ReservationRequestMappingResult.Invalid(
-                ReservationRequestMappingErrorCodes.RequestIdRequired);
+                ReservationRequestMappingErrorCodes.PayloadMessageIdRequired);
         }
 
         if (message.EventId == Guid.Empty)
@@ -56,15 +56,21 @@ internal sealed class ReservationRequestMapper
                 ReservationRequestMappingErrorCodes.MessageIdInvalid);
         }
 
-        if (messageId != message.RequestId)
+        if (messageId != message.MessageId)
         {
             return ReservationRequestMappingResult.Invalid(
                 ReservationRequestMappingErrorCodes.MessageIdMismatch);
         }
 
+        if (string.IsNullOrWhiteSpace(message.CorrelationId))
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.CorrelationIdRequired);
+        }
+
         return ReservationRequestMappingResult.Success(
             new ProcessReservationRequest(
-                message.RequestId,
+                message.MessageId,
                 message.EventId,
                 message.SeatId));
     }
