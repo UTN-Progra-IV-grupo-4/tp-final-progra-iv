@@ -55,11 +55,6 @@ services:
       - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     networks:
       - seat-reservation-net
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health/ready"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
 networks:
   seat-reservation-net:

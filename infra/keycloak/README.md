@@ -28,11 +28,13 @@ El realm `seat-reservation` contiene toda la configuración de autenticación y 
 
 ### Clients
 
-| Client | Tipo | Flujo | Purpose |
-|--------|------|-------|---------|
-| `availability-web` | Public | Authorization Code + PKCE | Autenticación de usuarios en Availability.Web |
-| `booking-service` | Confidential | Client Credentials | Booking obtiene tokens para llamar a Payment |
-| `payment-service` | Confidential | Validación de tokens | Payment valida tokens de Booking |
+| Client | Tipo | Flujo | Purpose | Audience Mapper |
+|--------|------|-------|---------|-----------------|
+| `availability-web` | Public | Authorization Code + PKCE | Autenticación de usuarios en Availability.Web | No aplica |
+| `booking-service` | Confidential | Client Credentials | Booking obtiene tokens para llamar a Payment | `payment-service` (incluye audience de Payment en el token) |
+| `payment-service` | Confidential | Validación de tokens | Payment valida tokens de Booking | No aplica (solo valida) |
+
+**Nota importante:** El client `booking-service` tiene un audience mapper configurado para incluir `payment-service` en el claim `aud` del token. Esto permite que Booking obtenga un token válido para llamar a Payment usando el flujo Client Credentials.
 
 ### Usuarios de prueba
 
