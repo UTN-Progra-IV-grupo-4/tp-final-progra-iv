@@ -16,12 +16,15 @@ internal static class ReservationRequestMappingErrorCodes
 
 internal sealed record ReservationRequestMappingResult(
     ProcessReservationRequest? Request,
-    string? ErrorCode)
+    string? ErrorCode,
+    string? CorrelationId = null)
 {
     public bool IsValid => Request is not null && ErrorCode is null;
 
-    public static ReservationRequestMappingResult Success(ProcessReservationRequest request) =>
-        new(request, null);
+    public static ReservationRequestMappingResult Success(
+        ProcessReservationRequest request,
+        string correlationId) =>
+        new(request, null, correlationId);
 
     public static ReservationRequestMappingResult Invalid(string errorCode) =>
         new(null, errorCode);

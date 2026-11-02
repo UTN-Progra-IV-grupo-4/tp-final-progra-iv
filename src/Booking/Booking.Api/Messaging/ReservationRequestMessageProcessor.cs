@@ -4,6 +4,9 @@ internal sealed class ReservationRequestMessageProcessor(
     IReservationRequestMessageHandler handler,
     ILogger<ReservationRequestMessageProcessor> logger)
 {
+    private const string ServiceName = "Booking";
+    private const string PaymentOutcomeUnknownErrorCode = "PaymentOutcomeUnknown";
+
     public async Task ProcessAsync(
         ReservationRequestDelivery delivery,
         IReservationRequestMessageSettlement settlement,
@@ -44,6 +47,7 @@ internal sealed class ReservationRequestMessageProcessor(
         }
 
         var decision = ReservationRequestSettlementDecider.Decide(handlingResult);
+        var correlationId = handlingResult.CorrelationId ?? delivery.CorrelationId;
 
         try
         {
@@ -65,7 +69,7 @@ internal sealed class ReservationRequestMessageProcessor(
                 "Reservation message settlement failed and will be retried. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; Action: {SettlementAction}; ExceptionType: {ExceptionType}.",
                 delivery.MessageId,
                 handlingResult.ProcessingResult?.RequestId,
-                delivery.CorrelationId,
+                correlationId,
                 decision.Action,
                 exception.GetType().FullName);
             throw;
@@ -77,27 +81,45 @@ internal sealed class ReservationRequestMessageProcessor(
                 Booking.Business.Payments.ReservationPaymentOutcome.PaymentUnavailable)
             {
                 logger.LogWarning(
-                    "Payment result remains unknown after bounded attempts. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}.",
+                    "Possible late payment; payment result unknown after bounded attempts. Service: {Service}; ErrorCode: {ErrorCode}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; DeliveryCount: {DeliveryCount}.",
+                    ServiceName,
+                    PaymentOutcomeUnknownErrorCode,
                     delivery.MessageId,
                     handlingResult.ProcessingResult!.RequestId,
-                    delivery.CorrelationId);
+                    correlationId,
+                    delivery.DeliveryCount);
             }
 
             logger.LogInformation(
                 "Reservation message completed. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; Outcome: {Outcome}; PaymentOutcome: {PaymentOutcome}.",
                 delivery.MessageId,
                 handlingResult.ProcessingResult!.RequestId,
-                delivery.CorrelationId,
+                correlationId,
                 handlingResult.ProcessingResult.Outcome,
                 handlingResult.PaymentResult?.Outcome);
         }
         else
         {
+            if (handlingResult.PaymentResult?.Outcome ==
+                Booking.Business.Payments.ReservationPaymentOutcome.LateApproved)
+            {
+                logger.LogWarning(
+                    "Late approved payment requires review. Service: {Service}; ErrorCode: {ErrorCode}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ChargeId: {ChargeId}; ReservationStatus: {ReservationStatus}; DeliveryCount: {DeliveryCount}.",
+                    ServiceName,
+                    ReservationRequestSettlementErrorCodes.PaymentApprovedAfterExpiry,
+                    delivery.MessageId,
+                    handlingResult.ProcessingResult!.RequestId,
+                    correlationId,
+                    handlingResult.PaymentResult.ChargeId,
+                    handlingResult.PaymentResult.CurrentStatus,
+                    delivery.DeliveryCount);
+            }
+
             logger.LogWarning(
                 "Reservation message moved to dead-letter. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ErrorCode: {ErrorCode}.",
                 delivery.MessageId,
                 handlingResult.ProcessingResult?.RequestId,
-                delivery.CorrelationId,
+                correlationId,
                 decision.Reason);
         }
     }

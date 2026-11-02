@@ -72,6 +72,7 @@ internal sealed class ReservationRequestMapper
             new ProcessReservationRequest(
                 message.MessageId,
                 message.EventId,
-                message.SeatId));
+                message.SeatId),
+            message.CorrelationId);
     }
 }

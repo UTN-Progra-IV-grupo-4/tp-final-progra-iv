@@ -30,7 +30,9 @@ internal sealed class ReservationRequestMessageHandler(
         if (!paymentOptions.Value.Enabled || processingResult.Outcome is not (
             ReservationProcessingOutcome.Retained or ReservationProcessingOutcome.Duplicate))
         {
-            return ReservationRequestHandlingResult.Processed(processingResult);
+            return ReservationRequestHandlingResult.Processed(
+                processingResult,
+                correlationId: mappingResult.CorrelationId);
         }
 
         var paymentProcessor = scope.ServiceProvider.GetRequiredService<ReservationPaymentProcessor>();
@@ -38,7 +40,7 @@ internal sealed class ReservationRequestMessageHandler(
         {
             var paymentResult = await paymentProcessor.ProcessAsync(
                 processingResult.RequestId,
-                delivery.CorrelationId,
+                mappingResult.CorrelationId,
                 cancellationToken);
 
             if (paymentResult.Outcome == ReservationPaymentOutcome.NotFound)
@@ -46,7 +48,10 @@ internal sealed class ReservationRequestMessageHandler(
                 throw new InvalidOperationException("A retained reservation was not found before payment.");
             }
 
-            return ReservationRequestHandlingResult.Processed(processingResult, paymentResult);
+            return ReservationRequestHandlingResult.Processed(
+                processingResult,
+                paymentResult,
+                correlationId: mappingResult.CorrelationId);
         }
         catch (PaymentChargeException exception) when (exception.Failure is
             PaymentChargeFailure.Pending or
@@ -56,7 +61,8 @@ internal sealed class ReservationRequestMessageHandler(
             // These outcomes require manual review; no payment terminal state was persisted.
             return ReservationRequestHandlingResult.Processed(
                 processingResult,
-                paymentFailure: exception.Failure);
+                paymentFailure: exception.Failure,
+                correlationId: mappingResult.CorrelationId);
         }
     }
 }

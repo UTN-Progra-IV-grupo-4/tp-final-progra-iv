@@ -18,7 +18,8 @@ public enum ReservationPaymentOutcome
 public sealed record ReservationPaymentResult(
     ReservationPaymentOutcome Outcome,
     Guid ReservationId,
-    ReservationStatus? CurrentStatus = null);
+    ReservationStatus? CurrentStatus = null,
+    string? ChargeId = null);
 
 public sealed class ReservationPaymentProcessor
 {
@@ -165,13 +166,15 @@ public sealed class ReservationPaymentProcessor
             null,
             ReservationPaymentOutcome.Confirmed,
             cancellationToken,
-            approvedCharge: true),
+            approvedCharge: true,
+            chargeId: charge.ChargeId),
         PaymentChargeOutcome.Declined => PersistOutcomeAsync(
             reservationId,
             ReservationStatus.Rejected,
             ReservationRejectionReason.PaymentFailed,
             ReservationPaymentOutcome.PaymentFailed,
-            cancellationToken),
+            cancellationToken,
+            chargeId: charge.ChargeId),
         _ => throw new PaymentChargeException(PaymentChargeFailure.UnexpectedResponse)
     };
 
@@ -181,23 +184,26 @@ public sealed class ReservationPaymentProcessor
         ReservationRejectionReason? rejectionReason,
         ReservationPaymentOutcome outcome,
         CancellationToken cancellationToken,
-        bool approvedCharge = false)
+        bool approvedCharge = false,
+        string? chargeId = null)
     {
         var now = timeProvider.GetUtcNow();
         if (await repository.TrySetPaymentOutcomeAsync(
             reservationId, status, rejectionReason, now, cancellationToken))
         {
-            return new ReservationPaymentResult(outcome, reservationId, status);
+            return new ReservationPaymentResult(outcome, reservationId, status, chargeId);
         }
 
         await repository.TryExpireAsync(reservationId, timeProvider.GetUtcNow(), cancellationToken);
-        return await ReadTerminalResultAsync(reservationId, approvedCharge, cancellationToken);
+        return await ReadTerminalResultAsync(
+            reservationId, approvedCharge, cancellationToken, chargeId);
     }
 
     private async Task<ReservationPaymentResult> ReadTerminalResultAsync(
         Guid reservationId,
         bool approvedCharge,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? chargeId = null)
     {
         var current = await repository.GetByIdAsync(reservationId, cancellationToken) ??
             throw new InvalidOperationException("Reservation disappeared during payment processing.");
@@ -213,6 +219,6 @@ public sealed class ReservationPaymentProcessor
                 ? ReservationPaymentOutcome.Expired
                 : ReservationPaymentOutcome.AlreadyTerminal;
 
-        return new ReservationPaymentResult(outcome, reservationId, current.Status);
+        return new ReservationPaymentResult(outcome, reservationId, current.Status, chargeId);
     }
 }
