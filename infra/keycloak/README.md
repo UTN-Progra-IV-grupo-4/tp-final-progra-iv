@@ -36,6 +36,8 @@ El realm `seat-reservation` contiene toda la configuración de autenticación y 
 
 **Nota importante:** El client `booking-service` tiene un audience mapper configurado para incluir `payment-service` en el claim `aud` del token. Esto permite que Booking obtenga un token válido para llamar a Payment usando el flujo Client Credentials.
 
+**Secretos:** Los clients confidenciales (`booking-service` y `payment-service`) usan placeholders `${KEYCLOAK_BOOKING_CLIENT_SECRET}` y `${KEYCLOAK_PAYMENT_CLIENT_SECRET}` en el realm-export.json. Estos se resuelven desde las variables de entorno durante la importación del realm. Los valores reales se configuran en el archivo `.env` y se pasan al contenedor Keycloak via docker-compose.
+
 ### Usuarios de prueba
 
 | Username | Password | Roles | Purpose |
@@ -110,12 +112,16 @@ KEYCLOAK_REALM=seat-reservation
 KEYCLOAK_ISSUER=http://localhost:8080/realms/seat-reservation
 KEYCLOAK_FRONTEND_CLIENT_ID=availability-web
 KEYCLOAK_BOOKING_CLIENT_ID=booking-service
-KEYCLOAK_BOOKING_CLIENT_SECRET=booking-service-secret-change-in-production
+KEYCLOAK_BOOKING_CLIENT_SECRET=<generar-una-contraseña-segura>
 KEYCLOAK_PAYMENT_CLIENT_ID=payment-service
-KEYCLOAK_PAYMENT_CLIENT_SECRET=payment-service-secret-change-in-production
+KEYCLOAK_PAYMENT_CLIENT_SECRET=<generar-una-contraseña-segura>
 ```
 
-**⚠️ IMPORTANTE**: Los valores `*_SECRET` deben cambiarse en producción. Nunca comitar el archivo `.env` real.
+**⚠️ IMPORTANTE**:
+- Los secretos deben generarse con contraseñas seguras (usar `openssl rand -base64 32` o similar)
+- El archivo `.env` nunca debe comitarse al repositorio
+- Los secretos se pasan al contenedor Keycloak via variables de entorno y se resuelven en el realm-import usando placeholders `${VAR}`
+- Los secretos también deben configurarse en los microservicios (Booking y Payment) para usar Client Credentials
 
 ## Instrucciones para ejecutar el servicio
 
@@ -250,6 +256,33 @@ netstat -an | grep 8080
 - Verificar que el token no esté expirado
 - Verificar que el audience sea correcto
 - Verificar que el client secret coincida
+
+### Placeholder de secretos no se resuelve
+
+Si el realm se importa pero los secretos no se reemplazan correctamente:
+
+1. Verificar que las variables de entorno estén definidas en `.env`:
+   ```bash
+   KEYCLOAK_BOOKING_CLIENT_SECRET=<tu-contraseña>
+   KEYCLOAK_PAYMENT_CLIENT_SECRET=<tu-contraseña>
+   ```
+
+2. Verificar que docker-compose.yml pase las variables al contenedor Keycloak:
+   ```yaml
+   environment:
+     KEYCLOAK_BOOKING_CLIENT_SECRET: ${KEYCLOAK_BOOKING_CLIENT_SECRET}
+     KEYCLOAK_PAYMENT_CLIENT_SECRET: ${KEYCLOAK_PAYMENT_CLIENT_SECRET}
+   ```
+
+3. Verificar que realm-export.json use el formato correcto:
+   ```json
+   "secret": "${KEYCLOAK_BOOKING_CLIENT_SECRET}"
+   ```
+
+4. Si la importación automática falla, reimportar manualmente desde la consola de Keycloak Admin:
+   - Ir a Realm Settings → Import
+   - Subir el archivo realm-export.json
+   - Los placeholders se resolverán si las variables de entorno están disponibles
 
 ## Referencias
 
