@@ -1,5 +1,6 @@
 using Booking.Api.Messaging;
 using Booking.Business;
+using Booking.Business.Payments;
 using Booking.Business.Reservations;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,6 +17,8 @@ if (string.IsNullOrWhiteSpace(bookingConnectionString))
 builder.Services.AddBookingBusiness(bookingConnectionString);
 builder.Services.Configure<ReservationProcessingOptions>(
     builder.Configuration.GetSection("ReservationProcessing"));
+builder.Services.Configure<PaymentProcessingOptions>(
+    builder.Configuration.GetSection("Payment"));
 builder.Services.AddBookingMessaging(builder.Configuration);
 
 builder.Services.AddControllers();

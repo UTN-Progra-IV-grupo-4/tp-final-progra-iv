@@ -16,6 +16,8 @@ internal static class BookingMessagingServiceCollectionExtensions
                 "When Broker:AzureServiceBus:Enabled is true, Broker:Provider must be AzureServiceBus and the connection string, topic and subscription are required.")
             .ValidateOnStart();
 
+        services.Configure<PaymentConsumerOptions>(configuration.GetSection("Payment"));
+
         services.AddSingleton<ReservationRequestMapper>();
         services.AddSingleton<IReservationRequestMessageHandler, ReservationRequestMessageHandler>();
         services.AddSingleton<ReservationRequestMessageProcessor>();

@@ -73,12 +73,23 @@ internal sealed class ReservationRequestMessageProcessor(
 
         if (decision.Action == ReservationRequestSettlementAction.Complete)
         {
+            if (handlingResult.PaymentResult?.Outcome ==
+                Booking.Business.Payments.ReservationPaymentOutcome.PaymentUnavailable)
+            {
+                logger.LogWarning(
+                    "Payment result remains unknown after bounded attempts. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}.",
+                    delivery.MessageId,
+                    handlingResult.ProcessingResult!.RequestId,
+                    delivery.CorrelationId);
+            }
+
             logger.LogInformation(
-                "Reservation message completed. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; Outcome: {Outcome}.",
+                "Reservation message completed. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; Outcome: {Outcome}; PaymentOutcome: {PaymentOutcome}.",
                 delivery.MessageId,
                 handlingResult.ProcessingResult!.RequestId,
                 delivery.CorrelationId,
-                handlingResult.ProcessingResult.Outcome);
+                handlingResult.ProcessingResult.Outcome,
+                handlingResult.PaymentResult?.Outcome);
         }
         else
         {

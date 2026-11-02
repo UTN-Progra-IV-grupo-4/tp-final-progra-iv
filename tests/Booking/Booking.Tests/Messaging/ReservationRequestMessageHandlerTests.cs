@@ -1,6 +1,7 @@
 using Booking.Api.Messaging;
 using Booking.Business.Reservations;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Booking.Tests.Messaging;
 
@@ -15,7 +16,8 @@ public sealed class ReservationRequestMessageHandlerTests
         await using var serviceProvider = services.BuildServiceProvider();
         var handler = new ReservationRequestMessageHandler(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            new ReservationRequestMapper());
+            new ReservationRequestMapper(),
+            Options.Create(new PaymentConsumerOptions()));
         var requestId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
         var seatId = Guid.NewGuid();
@@ -41,7 +43,8 @@ public sealed class ReservationRequestMessageHandlerTests
         await using var serviceProvider = services.BuildServiceProvider();
         var handler = new ReservationRequestMessageHandler(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            new ReservationRequestMapper());
+            new ReservationRequestMapper(),
+            Options.Create(new PaymentConsumerOptions()));
         var delivery = new ReservationRequestDelivery(
             BinaryData.FromString("{invalid-json"),
             Guid.NewGuid().ToString(),

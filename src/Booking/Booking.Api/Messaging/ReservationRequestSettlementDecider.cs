@@ -1,3 +1,4 @@
+using Booking.Business.Payments;
 using Booking.Business.Reservations;
 
 namespace Booking.Api.Messaging;
@@ -10,6 +11,8 @@ internal static class ReservationRequestSettlementDecider
         "The request identifier is already associated with another reservation payload.";
     private const string InvalidRequestDescription =
         "The reservation request failed business validation.";
+    private const string PaymentReviewDescription =
+        "The payment outcome requires manual review.";
 
     public static ReservationRequestSettlementDecision Decide(
         ReservationRequestHandlingResult handlingResult)
@@ -27,6 +30,43 @@ internal static class ReservationRequestSettlementDecider
         var processingResult = handlingResult.ProcessingResult ??
             throw new InvalidOperationException(
                 "A mapped reservation request requires a processing result.");
+
+        if (handlingResult.PaymentFailure is { } paymentFailure)
+        {
+            var reason = paymentFailure switch
+            {
+                PaymentChargeFailure.Pending => ReservationRequestSettlementErrorCodes.PaymentPending,
+                PaymentChargeFailure.InvalidRequest => ReservationRequestSettlementErrorCodes.PaymentInvalidRequest,
+                PaymentChargeFailure.UnexpectedResponse => ReservationRequestSettlementErrorCodes.PaymentUnexpectedResponse,
+                _ => throw new InvalidOperationException(
+                    $"Unexpected payment failure for settlement: {paymentFailure}.")
+            };
+
+            return new ReservationRequestSettlementDecision(
+                ReservationRequestSettlementAction.DeadLetter,
+                reason,
+                PaymentReviewDescription);
+        }
+
+        if (handlingResult.PaymentResult is { } paymentResult)
+        {
+            return paymentResult.Outcome switch
+            {
+                ReservationPaymentOutcome.Confirmed or
+                ReservationPaymentOutcome.PaymentFailed or
+                ReservationPaymentOutcome.PaymentUnavailable or
+                ReservationPaymentOutcome.Expired or
+                ReservationPaymentOutcome.AlreadyTerminal =>
+                    new ReservationRequestSettlementDecision(ReservationRequestSettlementAction.Complete),
+                ReservationPaymentOutcome.LateApproved =>
+                    new ReservationRequestSettlementDecision(
+                        ReservationRequestSettlementAction.DeadLetter,
+                        ReservationRequestSettlementErrorCodes.PaymentApprovedAfterExpiry,
+                        PaymentReviewDescription),
+                _ => throw new InvalidOperationException(
+                    $"Unexpected payment outcome for settlement: {paymentResult.Outcome}.")
+            };
+        }
 
         return processingResult.Outcome switch
         {
