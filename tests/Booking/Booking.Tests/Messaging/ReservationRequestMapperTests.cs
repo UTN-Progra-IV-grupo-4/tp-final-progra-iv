@@ -22,6 +22,7 @@ public sealed class ReservationRequestMapperTests
         Assert.Equal(requestId, result.Request.RequestId);
         Assert.Equal(eventId, result.Request.EventId);
         Assert.Equal(seatId, result.Request.SeatId);
+        Assert.Equal("test-correlation-id", result.CorrelationId);
     }
 
     [Fact]

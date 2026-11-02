@@ -37,6 +37,7 @@ public sealed class ReservationPaymentMessageFlowTests
         var charge = Assert.Single(harness.Payment.Requests);
         Assert.Equal(harness.RequestId, charge.ReservationId);
         Assert.Equal("correlation-19", charge.CorrelationId);
+        Assert.NotEqual("transport-correlation", charge.CorrelationId);
     }
 
     [Fact]
@@ -90,9 +91,12 @@ public sealed class ReservationPaymentMessageFlowTests
         Assert.Equal(ReservationStatus.Rejected, stored!.Status);
         Assert.Equal(ReservationRejectionReason.PaymentUnavailable, stored.RejectionReason);
         Assert.Contains(harness.Logs.Messages, message =>
-            message.Contains("Payment result remains unknown", StringComparison.Ordinal) &&
+            message.Contains("Possible late payment; payment result unknown", StringComparison.Ordinal) &&
+            message.Contains("Service: Booking", StringComparison.Ordinal) &&
+            message.Contains("ErrorCode: PaymentOutcomeUnknown", StringComparison.Ordinal) &&
             message.Contains(harness.RequestId.ToString(), StringComparison.Ordinal) &&
-            message.Contains("correlation-19", StringComparison.Ordinal));
+            message.Contains("correlation-19", StringComparison.Ordinal) &&
+            !message.Contains("transport-correlation", StringComparison.Ordinal));
         Assert.DoesNotContain(harness.Logs.Messages, message =>
             message.Contains("secret-user-payload", StringComparison.Ordinal));
     }
@@ -140,12 +144,15 @@ public sealed class ReservationPaymentMessageFlowTests
         Assert.Equal(ReservationStatus.Expired,
             (await harness.Repository.GetByIdAsync(harness.RequestId))!.Status);
         Assert.Contains(harness.Logs.Messages, message =>
+            message.Contains("Late approved payment requires review", StringComparison.Ordinal) &&
             message.Contains(ReservationRequestSettlementErrorCodes.PaymentApprovedAfterExpiry, StringComparison.Ordinal) &&
+            message.Contains("Service: Booking", StringComparison.Ordinal) &&
+            message.Contains("ChargeId: late-charge", StringComparison.Ordinal) &&
             message.Contains(harness.RequestId.ToString(), StringComparison.Ordinal) &&
-            message.Contains("correlation-19", StringComparison.Ordinal));
+            message.Contains("correlation-19", StringComparison.Ordinal) &&
+            !message.Contains("transport-correlation", StringComparison.Ordinal));
         Assert.DoesNotContain(harness.Logs.Messages, message =>
-            message.Contains("secret-user-payload", StringComparison.Ordinal) ||
-            message.Contains("late-charge", StringComparison.Ordinal));
+            message.Contains("secret-user-payload", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -232,7 +239,7 @@ public sealed class ReservationPaymentMessageFlowTests
         var invalidDelivery = new ReservationRequestDelivery(
             BinaryData.FromString("{invalid-json"),
             harness.RequestId.ToString(),
-            "correlation-19",
+            "transport-correlation",
             null);
 
         var settlement = await harness.ProcessAsync(delivery: invalidDelivery);
@@ -316,7 +323,7 @@ public sealed class ReservationPaymentMessageFlowTests
                   }
                   """),
             RequestId.ToString(),
-            "correlation-19",
+            "transport-correlation",
             null);
 
         public ValueTask DisposeAsync() => services.DisposeAsync();

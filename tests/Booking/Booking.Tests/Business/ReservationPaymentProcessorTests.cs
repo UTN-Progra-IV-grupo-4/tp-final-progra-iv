@@ -19,6 +19,7 @@ public sealed class ReservationPaymentProcessorTests
         var result = await CreateProcessor(repository, client, clock).ProcessAsync(reservation.Id, "correlation-1");
 
         Assert.Equal(ReservationPaymentOutcome.Confirmed, result.Outcome);
+        Assert.Equal("charge-1", result.ChargeId);
         Assert.Equal(ReservationStatus.Confirmed, (await repository.GetByIdAsync(reservation.Id))!.Status);
         var request = Assert.Single(client.Requests);
         Assert.Equal(reservation.Id, request.ReservationId);
@@ -102,6 +103,7 @@ public sealed class ReservationPaymentProcessorTests
         var result = await CreateProcessor(repository, client, clock).ProcessAsync(reservation.Id, null);
 
         Assert.Equal(ReservationPaymentOutcome.LateApproved, result.Outcome);
+        Assert.Equal("late-charge", result.ChargeId);
         Assert.Equal(ReservationStatus.Expired, (await repository.GetByIdAsync(reservation.Id))!.Status);
         Assert.Single(client.Requests);
     }
