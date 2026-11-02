@@ -25,63 +25,73 @@ namespace Availability.Infrastructure.Persistence.Migrations
             modelBuilder.Entity("Availability.Domain.Entities.Event", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
 
                     b.Property<DateTimeOffset>("StartsAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("starts_at");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Events", (string)null);
+                    b.ToTable("events", (string)null);
                 });
 
             modelBuilder.Entity("Availability.Domain.Entities.ReservationRequest", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<DateTimeOffset>("RequestedAt")
-                        .HasColumnType("timestamp with time zone");
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
 
                     b.Property<Guid>("SeatId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("seat_id");
 
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("user_id");
 
                     b.HasKey("Id");
 
                     b.HasIndex("SeatId");
 
-                    b.ToTable("ReservationRequests", (string)null);
+                    b.ToTable("reservation_requests", (string)null);
                 });
 
             modelBuilder.Entity("Availability.Domain.Entities.Seat", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<Guid>("EventId")
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
 
                     b.Property<string>("Number")
                         .IsRequired()
                         .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("number");
 
                     b.HasKey("Id");
 
                     b.HasIndex("EventId", "Number")
                         .IsUnique();
 
-                    b.ToTable("Seats", (string)null);
+                    b.ToTable("seats", (string)null);
                 });
 
             modelBuilder.Entity("Availability.Domain.Entities.ReservationRequest", b =>
