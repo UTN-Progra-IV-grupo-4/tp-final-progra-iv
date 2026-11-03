@@ -17,6 +17,7 @@ public class EventsController : ControllerBase
         _occupiedSeatsService = occupiedSeatsService;
     }
 
+    // TODO(#11): exigir un token de servicio con permiso para consultar Booking
     [HttpGet("{eventId}/occupied-seats")]
     [ProducesResponseType(
         typeof(OccupiedSeatsResponse),

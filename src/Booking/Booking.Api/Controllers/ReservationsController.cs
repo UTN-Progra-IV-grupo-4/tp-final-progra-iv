@@ -18,6 +18,7 @@ public class ReservationsController : ControllerBase
         _reservationStatusService = reservationStatusService;
     }
 
+    // TODO(#11): exigir un token de servicio con permiso para consultar Booking
     [HttpGet("{requestId}/status")]
     [ProducesResponseType(
         typeof(ReservationStatusResponse),
