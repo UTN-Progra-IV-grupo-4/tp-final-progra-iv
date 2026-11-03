@@ -15,4 +15,11 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>
 
+  <!-- Solo para PaymentDbContextFactory: dotnet ef crea el DbContext sin arrancar Program.cs y lee la
+       cadena de las mismas fuentes que la app en Development. Misma versión que EF Core y que Booking. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="10.0.14" />
+  </ItemGroup>
+
 </Project>
