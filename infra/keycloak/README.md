@@ -1,292 +1,130 @@
 # Keycloak - Authorization Server
 
-## Descripción
+Keycloak manages authentication and authorization for the seat reservation system using OpenID Connect (OIDC) and OAuth 2.0.
 
-Keycloak es el servidor de autorización del sistema de reserva de asientos. Gestiona la autenticación de usuarios y la autorización entre microservicios utilizando los protocolos OpenID Connect (OIDC) y OAuth 2.0.
-
-## Tecnologías
-
-- **Keycloak 26.0.7**: Servidor de identidad y acceso open source
-- **OpenID Connect (OIDC)**: Protocolo de autenticación para usuarios
-- **OAuth 2.0 Client Credentials**: Flujo de autenticación entre microservicios
-- **Docker**: Ejecución en contenedor para reproducibilidad
-
-## Estructura de carpetas
-
-```
-infra/keycloak/
-├── realm-export.json          # Configuración exportada del realm
-├── import-realm.sh            # Script para importar el realm manualmente
-└── README.md                  # Esta documentación
-```
-
-## Configuración del Realm
+## Configuration
 
 ### Realm: `seat-reservation`
 
-El realm `seat-reservation` contiene toda la configuración de autenticación y autorización del sistema.
+**Clients:**
 
-### Clients
-
-| Client | Tipo | Flujo | Purpose | Audience Mapper |
+| Client | Type | Flow | Purpose | Audience Mapper |
 |--------|------|-------|---------|-----------------|
-| `availability-web` | Public | Authorization Code + PKCE | Autenticación de usuarios en Availability.Web | No aplica |
-| `booking-service` | Confidential | Client Credentials | Booking obtiene tokens para llamar a Payment | `payment-service` (incluye audience de Payment en el token) |
-| `payment-service` | Confidential | Validación de tokens | Payment valida tokens de Booking | No aplica (solo valida) |
+| `availability-web` | Public | Authorization Code + PKCE | User authentication in Availability.Web | N/A |
+| `availability-service` | Confidential | Client Credentials | Availability calls Booking | `booking-service` |
+| `booking-service` | Confidential | Client Credentials | Booking calls Payment | `payment-service` |
+| `payment-service` | Confidential | Token validation | Payment validates tokens | N/A |
 
-**Nota importante:** El client `booking-service` tiene un audience mapper configurado para incluir `payment-service` en el claim `aud` del token. Esto permite que Booking obtenga un token válido para llamar a Payment usando el flujo Client Credentials.
+**Secrets** use placeholders `${VAR}` resolved from environment variables during realm import.
 
-**Secretos:** Los clients confidenciales (`booking-service` y `payment-service`) usan placeholders `${KEYCLOAK_BOOKING_CLIENT_SECRET}` y `${KEYCLOAK_PAYMENT_CLIENT_SECRET}` en el realm-export.json. Estos se resuelven desde las variables de entorno durante la importación del realm. Los valores reales se configuran en el archivo `.env` y se pasan al contenedor Keycloak via docker-compose.
+**Test users** (development only, passwords in cleartext):
+- `user1` / `User123!`
+- `user2` / `User123!`
 
-### Usuarios de prueba
+**Identity provider:** Google (disabled until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured)
 
-| Username | Password | Roles | Purpose |
-|----------|----------|-------|---------|
-| `user1` | `User123!` | `user` | Usuario regular para reservas |
-| `user2` | `User123!` | `user` | Segundo usuario para testing de concurrencia |
-| `admin` | `Admin123!` | `admin`, `user` | Usuario administrativo |
-
-### Roles
-
-- `user`: Rol estándar para usuarios regulares
-- `admin`: Rol con permisos elevados (futuro uso)
-
-## Flujo de autenticación de usuarios
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Availability.Web
-    participant Keycloak
-    participant Browser
-
-    User->>Browser: Navega a Availability
-    Browser->>Availability.Web: GET /seats
-    Availability.Web-->>Browser: Retorna vista (público)
-
-    User->>Browser: Click en "Reservar"
-    Browser->>Availability.Web: POST /reservations
-    Availability.Web-->>Browser: 401 Unauthorized
-
-    User->>Browser: Click en "Login"
-    Browser->>Keycloak: Redirect /auth (Authorization Code + PKCE)
-    Keycloak-->>Browser: Login form
-    User->>Browser: Ingresa credenciales
-    Browser->>Keycloak: POST credentials
-    Keycloak-->>Browser: Authorization Code
-    Browser->>Keycloak: POST /token (intercambia code por access token)
-    Keycloak-->>Browser: Access Token (JWT)
-    Browser->>Availability.Web: POST /reservations + Bearer token
-    Availability.Web->>Keycloak: Validar token (o valida localmente)
-    Availability.Web-->>Browser: 200 OK (reserva aceptada)
-```
-
-## Flujo de autenticación entre microservicios (Client Credentials)
-
-```mermaid
-sequenceDiagram
-    participant Booking
-    participant Keycloak
-    participant Payment
-
-    Booking->>Booking: Necesita llamar a Payment
-    Booking->>Keycloak: POST /token (client_id + client_secret)
-    Keycloak->>Keycloak: Valida credenciales de servicio
-    Keycloak-->>Booking: Access Token (JWT con scope payment)
-    Booking->>Payment: gRPC call + Authorization: Bearer <token>
-    Payment->>Payment: Valida firma, issuer, audience, expiración
-    Payment->>Payment: Valida scope (tiene permiso payment?)
-    Payment-->>Booking: Respuesta (éxito o error)
-```
-
-## Configuración de variables de entorno
-
-Crear un archivo `.env` en la raíz del proyecto:
+## Quick Start
 
 ```bash
-# Keycloak
+# 1. Copy and fill .env
+cp .env.example .env
+# Edit .env to set KEYCLOAK_ADMIN, KEYCLOAK_ADMIN_PASSWORD, and all *_SECRET variables
+
+# 2. Start Keycloak
+docker compose up keycloak -d
+
+# 3. Access admin console
+# URL: http://localhost:8080/admin
+# Login with credentials from .env (KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD)
+```
+
+## Test Client Credentials
+
+```bash
+# Get token for booking-service
+curl -X POST http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=booking-service" \
+  -d "client_secret=<KEYCLOAK_BOOKING_CLIENT_SECRET from .env>"
+```
+
+The returned JWT should include `aud: ["payment-service"]` (added by the audience mapper). Decode at https://jwt.io to verify.
+
+## Environment Variables
+
+Required in `.env`:
+
+```bash
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=admin
 KEYCLOAK_PORT=8080
 KEYCLOAK_REALM=seat-reservation
 KEYCLOAK_ISSUER=http://localhost:8080/realms/seat-reservation
 KEYCLOAK_FRONTEND_CLIENT_ID=availability-web
+KEYCLOAK_AVAILABILITY_CLIENT_ID=availability-service
+KEYCLOAK_AVAILABILITY_CLIENT_SECRET=<generate-secure-secret>
 KEYCLOAK_BOOKING_CLIENT_ID=booking-service
-KEYCLOAK_BOOKING_CLIENT_SECRET=<generar-una-contraseña-segura>
+KEYCLOAK_BOOKING_CLIENT_SECRET=<generate-secure-secret>
 KEYCLOAK_PAYMENT_CLIENT_ID=payment-service
-KEYCLOAK_PAYMENT_CLIENT_SECRET=<generar-una-contraseña-segura>
+KEYCLOAK_PAYMENT_CLIENT_SECRET=<generate-secure-secret>
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
 ```
 
-**⚠️ IMPORTANTE**:
-- Los secretos deben generarse con contraseñas seguras (usar `openssl rand -base64 32` o similar)
-- El archivo `.env` nunca debe comitarse al repositorio
-- Los secretos se pasan al contenedor Keycloak via variables de entorno y se resuelven en el realm-import usando placeholders `${VAR}`
-- Los secretos también deben configurarse en los microservicios (Booking y Payment) para usar Client Credentials
-
-## Instrucciones para ejecutar el servicio
-
-### 1. Configurar variables de entorno
-
-```bash
-cp .env.example .env
-# Editar .env con tus valores (o usar los defaults para desarrollo)
-```
-
-### 2. Levantar Keycloak con Docker Compose
-
-```bash
-docker-compose up keycloak
-```
-
-O para levantar todos los servicios:
-
-```bash
-docker-compose up
-```
-
-### 3. Verificar que Keycloak está funcionando
-
-```bash
-curl http://localhost:8080/health/ready
-```
-
-Debería retornar `{"status":"UP"}`.
-
-### 4. Acceder a la consola de administración
-
-- URL: http://localhost:8080/admin
-- Usuario: `admin`
-- Contraseña: `admin` (o la configurada en `.env`)
-
-### 5. Importar realm manualmente (si falla la importación automática)
-
-```bash
-# Dentro del contenedor
-docker exec -it keycloak bash
-cd /opt/keycloak/data/import
-bash import-realm.sh
-```
-
-## Auditoría
-
-Keycloak registra automáticamente:
-
-- Intentos de login exitosos y fallidos
-- Emisión de tokens
-- Errores de autenticación
-- Errores de autorización
-
-Los logs están disponibles en:
-
-```bash
-docker logs keycloak
-```
-
-## Endpoints importantes
-
-| Endpoint | Purpose |
-|----------|---------|
-| `http://localhost:8080/health/ready` | Health check |
-| `http://localhost:8080/realms/seat-reservation/.well-known/openid-configuration` | Discovery endpoint OIDC |
-| `http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token` | Token endpoint |
-| `http://localhost:8080/realms/seat-reservation/protocol/openid-connect/auth` | Authorization endpoint |
-| `http://localhost:8080/admin` | Consola de administración |
-
-## Exportar/Importar Realm
-
-### Exportar realm actual
-
-```bash
-# Desde la consola de Keycloak Admin
-# Realm Settings -> Export -> Download JSON
-```
-
-### Importar realm manualmente
-
-```bash
-# Via API Admin
-curl -X POST http://localhost:8080/admin/realms \
-  -H "Authorization: Bearer <admin-token>" \
-  -H "Content-Type: application/json" \
-  -d @infra/keycloak/realm-export.json
-```
-
-## Justificación de decisiones arquitectónicas
-
-### ¿Por qué Keycloak en Docker?
-
-- **Reproducibilidad**: Cualquier miembro del equipo obtiene la misma configuración con `docker-compose up`
-- **Independencia de servicios externos**: Funciona sin internet y sin depender de permisos de Azure
-- **Costo cero**: Open source y gratuito
-- **Cumple requisitos del TP**: Validado por el profesor como contenedor virtualizado
-
-### ¿Por qué Authorization Code + PKCE para usuarios?
-
-- **Seguridad**: PKCE previene ataques de authorization code interception
-- **Compatible con SPAs**: Funciona bien con aplicaciones web modernas
-- **Estándar**: Recomendado por OAuth 2.1 para clientes públicos
-
-### ¿Por qué Client Credentials para microservicios?
-
-- **Separación de concernes**: Los servicios tienen su propia identidad, no reutilizan tokens de usuarios
-- **Seguridad**: Los secretos son confidenciales y pueden rotarse
-- **Requisito del TP**: Especificado por el profesor
+**⚠️ Important:**
+- Generate secure secrets for `*_CLIENT_SECRET` (e.g., `openssl rand -base64 32`)
+- Never commit `.env` to the repository
+- Google IDP is optional; local users work without it
 
 ## Troubleshooting
 
-### Keycloak no arranca
+### Container fails to start
 
-```bash
-# Ver logs
-docker logs keycloak
+If a secret variable is empty or undefined, Docker Compose will fail to start (using `${VAR:?}` syntax). Check that all `KEYCLOAK_*_CLIENT_SECRET` variables are set in `.env`.
 
-# Verificar puerto no está en uso
-netstat -an | grep 8080
-```
+### Placeholders not resolved
 
-### Importación automática falla
+If realm imports but secrets remain as literal `${...}` text:
+1. Verify environment variables are set in `.env`
+2. Verify docker-compose.yml passes them to the container
+3. Restart: `docker compose down && docker compose up keycloak -d`
 
-- Usar el script `import-realm.sh` manualmente
-- Verificar que el archivo `realm-export.json` tiene formato JSON válido
-- Asegurarse de que Keycloak esté completamente iniciado antes de importar
+### Token validation fails
 
-### Token validation falla en microservicios
+- Verify `KEYCLOAK_ISSUER` matches Keycloak URL
+- Verify token is not expired
+- Verify audience matches the target service
+- Verify client secret matches between service and Keycloak
 
-- Verificar que `KEYCLOAK_ISSUER` sea correcto
-- Verificar que el token no esté expirado
-- Verificar que el audience sea correcto
-- Verificar que el client secret coincida
+## Architecture Decisions
 
-### Placeholder de secretos no se resuelve
+**Why Keycloak in Docker:**
+- Reproducible: anyone gets the same config with `docker compose up`
+- No external dependencies: works offline, no Azure account needed
+- Free and open source
+- Validated by professor for this TP
 
-Si el realm se importa pero los secretos no se reemplazan correctamente:
+**Why Authorization Code + PKCE for users:**
+- PKCE prevents authorization code interception attacks
+- Standard for public clients in OAuth 2.1
+- Works well with modern web apps
 
-1. Verificar que las variables de entorno estén definidas en `.env`:
-   ```bash
-   KEYCLOAK_BOOKING_CLIENT_SECRET=<tu-contraseña>
-   KEYCLOAK_PAYMENT_CLIENT_SECRET=<tu-contraseña>
-   ```
+**Why Client Credentials for services:**
+- Services have their own identity, don't reuse user tokens
+- Secrets are confidential and can be rotated
+- Required by the TP specification
 
-2. Verificar que docker-compose.yml pase las variables al contenedor Keycloak:
-   ```yaml
-   environment:
-     KEYCLOAK_BOOKING_CLIENT_SECRET: ${KEYCLOAK_BOOKING_CLIENT_SECRET}
-     KEYCLOAK_PAYMENT_CLIENT_SECRET: ${KEYCLOAK_PAYMENT_CLIENT_SECRET}
-   ```
+## Endpoints
 
-3. Verificar que realm-export.json use el formato correcto:
-   ```json
-   "secret": "${KEYCLOAK_BOOKING_CLIENT_SECRET}"
-   ```
+| Endpoint | Purpose |
+|----------|---------|
+| `http://localhost:8080/realms/seat-reservation/.well-known/openid-configuration` | OIDC discovery |
+| `http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token` | Token endpoint |
+| `http://localhost:8080/admin` | Admin console |
 
-4. Si la importación automática falla, reimportar manualmente desde la consola de Keycloak Admin:
-   - Ir a Realm Settings → Import
-   - Subir el archivo realm-export.json
-   - Los placeholders se resolverán si las variables de entorno están disponibles
-
-## Referencias
+## References
 
 - [Keycloak Documentation](https://www.keycloak.org/documentation)
-- [OpenID Connect Specification](https://openid.net/connect/)
-- [OAuth 2.0 Client Credentials](https://oauth.net/2/grant-types/client-credentials/)
-- [Issue #5 - Decisión: servidor de autorización](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)
+- [Issue #5 - Authorization server decision](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)
+- [Issue #10 - Configure authorization server](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/10)

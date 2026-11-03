@@ -42,23 +42,6 @@
       "clientRoles": {
         "account": ["view-profile", "manage-account"]
       }
-    },
-    {
-      "username": "admin",
-      "enabled": true,
-      "emailVerified": true,
-      "email": "admin@example.com",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "Admin123!",
-          "temporary": false
-        }
-      ],
-      "realmRoles": ["admin", "user"],
-      "clientRoles": {
-        "account": ["view-profile", "manage-account"]
-      }
     }
   ],
   "roles": {
@@ -92,7 +75,8 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "attributes": {
-        "pkce.code.challenge.method": "S256"
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+http://localhost:5212,+https://localhost:7057"
       },
       "protocol": "openid-connect",
       "protocolMappers": [
@@ -177,6 +161,62 @@
       },
       "protocolMappers": [],
       "defaultClientScopes": ["web-origins", "roles", "profile", "email"]
+    },
+    {
+      "clientId": "availability-service",
+      "name": "Availability Service",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${KEYCLOAK_AVAILABILITY_CLIENT_SECRET}",
+      "redirectUris": [],
+      "webOrigins": [],
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "3600"
+      },
+      "protocolMappers": [
+        {
+          "name": "booking-service-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "booking-service",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ],
+      "defaultClientScopes": ["web-origins", "roles", "profile", "email"]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "google",
+      "providerId": "google",
+      "enabled": true,
+      "updateProfileFirstLoginMode": "on",
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstLoginFlowAlias": "auto-link",
+      "config": {
+        "useJwksUrl": "true",
+        "jwksUrl": "https://www.googleapis.com/oauth2/v3/certs",
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "authorizationUrl": "https://accounts.google.com/o/oauth2/auth",
+        "tokenUrl": "https://oauth2.googleapis.com/token",
+        "userInfoUrl": "https://openidconnect.googleapis.com/v1/userinfo",
+        "issuer": "https://accounts.google.com"
+      }
     }
   ],
   "browserSecurityHeaders": {
