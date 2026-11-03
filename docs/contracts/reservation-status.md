@@ -47,7 +47,7 @@ This operation only reads the stored state; it does not process payments or chan
 400 and 404 use Problem Details (`application/problem+json`) with `type`, `title`, `status` and `detail`.
 Clients use the HTTP status, not error text. No JSON body is required for 401/403.
 
-A 404 may mean Booking has not consumed the request yet; it does not imply rejection.
+A 404 may mean Booking has not consumed the request yet; it does not imply rejection. For a request that Availability itself registered (#15), Availability treats a 404 as "processing", not as an error.
 For a known submitted request, Availability may retry with a bounded polling policy defined in #16.
 
 ## Sequence
