@@ -11,6 +11,7 @@ Authorization: Bearer <service-token>
 
 `requestId` is a valid, non-empty UUID matching `Reservation.Id`. No request body.
 Service authentication and permissions are configured in #11.
+Availability calls Booking with its `availability-service` token. Before showing the status, Availability must verify that the request belongs to the signed-in user (#16). Booking receives no `userId` and does not check ownership.
 
 ## Response: 200 OK
 
@@ -57,6 +58,7 @@ sequenceDiagram
     participant A as Availability
     participant B as Booking
     participant DB as Booking PostgreSQL
+    A->>A: Verify the signed-in user owns the request
     A->>B: GET status + service token
     B->>B: Validate access and requestId
     alt Invalid access or requestId

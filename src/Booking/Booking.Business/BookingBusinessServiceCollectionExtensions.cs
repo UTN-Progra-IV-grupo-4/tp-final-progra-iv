@@ -13,6 +13,7 @@ public static class BookingBusinessServiceCollectionExtensions
         services.AddBookingData(connectionString);
         services.AddOptions<ReservationProcessingOptions>();
         services.AddScoped<IReservationRequestProcessor, ReservationRequestProcessor>();
+        services.AddScoped<IExpireRetainedReservations, ExpireRetainedReservations>();
         services.TryAddSingleton(TimeProvider.System);
 
         // Comparte el ámbito con el repositorio y el contexto.
