@@ -1,29 +1,77 @@
 using Booking.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Booking.Data.Repositories;
 
-// Separa el acceso a datos de las operaciones de Business.
-public class ReservationRepository
+public sealed class ReservationRepository(BookingDbContext dbContext)
+    : IReservationRepository
 {
-    private readonly BookingDbContext _dbContext;
+    private const string SeatReservationConstraint =
+        "IX_reservations_event_id_seat_id";
 
-    // Recibe el contexto mediante inyección de dependencias.
-    public ReservationRepository(BookingDbContext dbContext)
-    {
-        _dbContext = dbContext;
-    }
-
-    // Busca por id de solicitud; devuelve null si no encuentra la reserva.
+    // Consulta de solo lectura para obtener el estado de una reserva.
     public async Task<Reservation?> GetByIdAsync(
         Guid requestId,
         CancellationToken cancellationToken = default)
     {
-        return await _dbContext.Reservations
-            // Solo consultamos: no necesitamos seguimiento de cambios.
+        return await dbContext.Reservations
             .AsNoTracking()
             .SingleOrDefaultAsync(
                 reservation => reservation.Id == requestId,
                 cancellationToken);
     }
+
+    public async Task<ReservationInsertResult> TryInsertAsync(
+        Reservation reservation,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+
+        dbContext.Reservations.Add(reservation);
+
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+            return ReservationInsertResult.Created();
+        }
+        catch (DbUpdateException exception)
+            when (GetUniqueViolation(exception) is not null)
+        {
+            // SaveChanges leaves failed entries tracked. Detaching them makes the scoped
+            // context safe for the query and for a possible Rejected/SeatTaken insert.
+            foreach (var entry in exception.Entries)
+            {
+                entry.State = EntityState.Detached;
+            }
+
+            var existingReservation = await dbContext.Reservations
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    existing => existing.Id == reservation.Id,
+                    cancellationToken);
+
+            if (existingReservation is not null)
+            {
+                return ReservationInsertResult.RequestIdExists(
+                    existingReservation);
+            }
+
+            var uniqueViolation = GetUniqueViolation(exception)!;
+
+            if (uniqueViolation.ConstraintName == SeatReservationConstraint)
+            {
+                return ReservationInsertResult.SeatTaken();
+            }
+
+            throw;
+        }
+    }
+
+    private static PostgresException? GetUniqueViolation(
+        DbUpdateException exception) =>
+        exception.InnerException is PostgresException postgresException &&
+        postgresException.SqlState == PostgresErrorCodes.UniqueViolation
+            ? postgresException
+            : null;
 }

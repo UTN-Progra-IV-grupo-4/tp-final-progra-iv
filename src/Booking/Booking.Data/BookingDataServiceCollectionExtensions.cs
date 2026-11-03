@@ -1,6 +1,6 @@
+using Booking.Data.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Booking.Data.Repositories;
 
 namespace Booking.Data;
 
@@ -11,6 +11,7 @@ public static class BookingDataServiceCollectionExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         services.AddDbContext<BookingDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddScoped<IReservationRepository, ReservationRepository>();
 
         // Usa el mismo ámbito por petición que BookingDbContext.
         services.AddScoped<ReservationRepository>();
