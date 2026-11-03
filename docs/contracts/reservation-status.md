@@ -32,7 +32,7 @@ Content-Type: `application/json`. Property names use camelCase; enum values are 
 | Expired | Retention expired. | null |
 
 All three fields are always included. A rejected reservation also returns HTTP 200: the query succeeded.
-This operation only reads the stored state; it does not process payments or change reservations.
+This operation does not process payments or change reservations. A stored `Retained` reservation whose `ExpiresAt` is at or before the current UTC time is reported as `Expired`, with `rejectionReason: null`, even before the expiration job updates it (#20).
 
 ## Errors
 
@@ -65,6 +65,7 @@ sequenceDiagram
         B->>DB: Find reservation by Id
         DB-->>B: Reservation or no record
         alt Found
+            B->>B: Report overdue Retained as Expired (read only)
             B-->>A: 200 + requestId, status, rejectionReason
         else Not found
             B-->>A: 404 Problem Details
