@@ -22,6 +22,25 @@ public sealed class ReservationRepository(BookingDbContext dbContext)
                 cancellationToken);
     }
 
+    // Obtiene los asientos ocupados del evento al instante indicado.
+    public async Task<IReadOnlyList<Guid>> GetOccupiedSeatIdsAsync(
+        Guid eventId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Reservations
+            .AsNoTracking()
+            .Where(reservation => reservation.EventId == eventId)
+            .Where(reservation =>
+                reservation.Status == ReservationStatus.Confirmed ||
+                (reservation.Status == ReservationStatus.Retained &&
+                    (!reservation.ExpiresAt.HasValue ||
+                     reservation.ExpiresAt.Value > now)))
+            .Select(reservation => reservation.SeatId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<ReservationInsertResult> TryInsertAsync(
         Reservation reservation,
         CancellationToken cancellationToken = default)
