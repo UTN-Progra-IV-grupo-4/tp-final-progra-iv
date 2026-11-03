@@ -11,6 +11,7 @@ Authorization: Bearer <service-token>
 
 `requestId` is a valid, non-empty UUID matching `Reservation.Id`. No request body.
 Service authentication and permissions are configured in #11.
+Availability calls Booking with its `availability-service` token. Before showing the status, Availability must verify that the request belongs to the signed-in user (#16). Booking receives no `userId` and does not check ownership.
 
 ## Response: 200 OK
 
@@ -32,7 +33,7 @@ Content-Type: `application/json`. Property names use camelCase; enum values are 
 | Expired | Retention expired. | null |
 
 All three fields are always included. A rejected reservation also returns HTTP 200: the query succeeded.
-This operation only reads the stored state; it does not process payments or change reservations.
+This operation does not process payments or change reservations. A stored `Retained` reservation whose `ExpiresAt` is at or before the current UTC time is reported as `Expired`, with `rejectionReason: null`, even before the expiration job updates it (#20).
 
 ## Errors
 
@@ -57,6 +58,7 @@ sequenceDiagram
     participant A as Availability
     participant B as Booking
     participant DB as Booking PostgreSQL
+    A->>A: Verify the signed-in user owns the request
     A->>B: GET status + service token
     B->>B: Validate access and requestId
     alt Invalid access or requestId
@@ -65,6 +67,7 @@ sequenceDiagram
         B->>DB: Find reservation by Id
         DB-->>B: Reservation or no record
         alt Found
+            B->>B: Report overdue Retained as Expired (read only)
             B-->>A: 200 + requestId, status, rejectionReason
         else Not found
             B-->>A: 404 Problem Details
