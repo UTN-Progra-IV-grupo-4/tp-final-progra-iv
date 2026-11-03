@@ -8,12 +8,15 @@ namespace Booking.Business.Services;
 public class ReservationStatusService
 {
     private readonly ReservationRepository _reservationRepository;
+    private readonly TimeProvider _timeProvider;
 
-    // Recibe el repositorio mediante inyección de dependencias.
+    // Recibe el repositorio y el reloj mediante inyección de dependencias.
     public ReservationStatusService(
-        ReservationRepository reservationRepository)
+        ReservationRepository reservationRepository,
+        TimeProvider timeProvider)
     {
         _reservationRepository = reservationRepository;
+        _timeProvider = timeProvider;
     }
 
     public async Task<ReservationStatusResponse?> GetStatusAsync(
@@ -38,13 +41,24 @@ public class ReservationStatusService
                 "A rejected reservation must have a rejection reason.");
         }
 
+        var responseStatus = reservation.Status;
+        var now = _timeProvider.GetUtcNow();
+
+        // Refleja el vencimiento en la respuesta sin modificar la reserva.
+        if (responseStatus == ReservationStatus.Retained &&
+            reservation.ExpiresAt.HasValue &&
+            reservation.ExpiresAt.Value <= now)
+        {
+            responseStatus = ReservationStatus.Expired;
+        }
+
         // Expone únicamente los datos definidos en el contrato.
         return new ReservationStatusResponse
         {
             RequestId = reservation.Id,
-            Status = reservation.Status.ToString(),
+            Status = responseStatus.ToString(),
             RejectionReason =
-                reservation.Status == ReservationStatus.Rejected
+                responseStatus == ReservationStatus.Rejected
                     ? reservation.RejectionReason?.ToString()
                     : null
         };
