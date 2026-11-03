@@ -17,10 +17,10 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
         var reservationId = ValidateRequest(request);
 
         // Scope de logging: todos los logs de ChargeService llevan el CorrelationId sin que Business lo conozca.
-        using var _ = logger.BeginScope(new Dictionary<string, object?>
-        {
-            ["CorrelationId"] = context.RequestHeaders.GetValue(CorrelationIdHeader)
-        });
+        // Plantilla y no diccionario: la consola la imprime legible y los proveedores estructurados
+        // reciben igual CorrelationId como propiedad.
+        using var _ = logger.BeginScope(
+            "CorrelationId:{CorrelationId}", context.RequestHeaders.GetValue(CorrelationIdHeader));
 
         try
         {
