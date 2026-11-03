@@ -102,6 +102,120 @@ public sealed class ReservationRequestProcessorIntegrationTests(PostgreSqlFixtur
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenConsumersCompeteForExpiredRetainedSeat_CreatesOnlyOneRetainedReservation()
+    {
+        await fixture.ResetAsync();
+        var eventId = Guid.NewGuid();
+        var seatId = Guid.NewGuid();
+        var expiredReservation = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            SeatId = seatId,
+            Status = ReservationStatus.Retained,
+            ExpiresAt = UtcNow
+        };
+        await using (var seedDbContext = fixture.CreateDbContext())
+        {
+            seedDbContext.Reservations.Add(expiredReservation);
+            await seedDbContext.SaveChangesAsync();
+        }
+
+        var requests = new[]
+        {
+            new ProcessReservationRequest(Guid.NewGuid(), eventId, seatId),
+            new ProcessReservationRequest(Guid.NewGuid(), eventId, seatId)
+        };
+        var startGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tasks = requests.Select(request => ProcessAsync(request, startGate.Task)).ToArray();
+
+        startGate.SetResult();
+        var results = await Task.WhenAll(tasks);
+
+        Assert.Single(results, result => result.Outcome == ReservationProcessingOutcome.Retained);
+        Assert.Single(results, result => result.Outcome == ReservationProcessingOutcome.SeatTaken);
+
+        await using var verificationDbContext = fixture.CreateDbContext();
+        var reservations = await verificationDbContext.Reservations
+            .AsNoTracking()
+            .ToListAsync();
+        Assert.Equal(3, reservations.Count);
+        Assert.Contains(reservations, reservation =>
+            reservation.Id == expiredReservation.Id &&
+            reservation.Status == ReservationStatus.Expired);
+        Assert.Single(reservations, reservation => reservation.Status == ReservationStatus.Retained);
+        Assert.Single(reservations, reservation =>
+            reservation.Status == ReservationStatus.Rejected &&
+            reservation.RejectionReason == ReservationRejectionReason.SeatTaken);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenConsumerExpiresReservationBeforeJobUpdate_JobDoesNotExpireNewReservation()
+    {
+        await fixture.ResetAsync();
+        var eventId = Guid.NewGuid();
+        var seatId = Guid.NewGuid();
+        var expiredReservation = new Reservation
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            SeatId = seatId,
+            Status = ReservationStatus.Retained,
+            ExpiresAt = UtcNow
+        };
+        await using (var seedDbContext = fixture.CreateDbContext())
+        {
+            seedDbContext.Reservations.Add(expiredReservation);
+            await seedDbContext.SaveChangesAsync();
+        }
+
+        await using var jobDbContext = fixture.CreateDbContext();
+        var jobRepository = new ReservationRepository(jobDbContext);
+        var gatedJobRepository = new GatedTryExpireReservationRepository(
+            jobRepository,
+            expiredReservation.Id);
+        var expirationUseCase = new ExpireRetainedReservations(
+            gatedJobRepository,
+            new FixedTimeProvider(UtcNow),
+            Options.Create(new ReservationProcessingOptions
+            {
+                ExpirationBatchSize = 10
+            }));
+
+        var jobTask = expirationUseCase.ExecuteAsync();
+
+        try
+        {
+            await gatedJobRepository.TryExpireStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var request = new ProcessReservationRequest(Guid.NewGuid(), eventId, seatId);
+            var result = await ProcessAsync(request, Task.CompletedTask);
+            Assert.Equal(ReservationProcessingOutcome.Retained, result.Outcome);
+        }
+        finally
+        {
+            gatedJobRepository.ContinueTryExpire.TrySetResult();
+        }
+
+        var jobResult = await jobTask;
+        Assert.Equal(0, jobResult.ProcessedCount);
+        Assert.Empty(jobResult.ReservationIds);
+
+        await using var verificationDbContext = fixture.CreateDbContext();
+        var reservations = await verificationDbContext.Reservations
+            .AsNoTracking()
+            .ToListAsync();
+        Assert.Equal(2, reservations.Count);
+        Assert.Contains(reservations, reservation =>
+            reservation.Id == expiredReservation.Id &&
+            reservation.Status == ReservationStatus.Expired);
+        Assert.Contains(reservations, reservation =>
+            reservation.EventId == eventId &&
+            reservation.SeatId == seatId &&
+            reservation.Status == ReservationStatus.Retained &&
+            reservation.ExpiresAt > UtcNow);
+    }
+
+    [Fact]
     public async Task ProcessAsync_WhenManyRequestsCompeteForSameSeat_StoresOneRetainedAndOtherRejections()
     {
         await fixture.ResetAsync();
@@ -175,5 +289,58 @@ public sealed class ReservationRequestProcessorIntegrationTests(PostgreSqlFixtur
 
         await startGate;
         return await processor.ProcessAsync(request);
+    }
+
+    private sealed class GatedTryExpireReservationRepository(
+        IReservationRepository innerRepository,
+        Guid reservationId) : IReservationRepository
+    {
+        private int hasGatedExpiration;
+
+        public TaskCompletionSource TryExpireStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource ContinueTryExpire { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<ReservationInsertResult> TryInsertAsync(
+            Reservation reservation,
+            CancellationToken cancellationToken = default) =>
+            innerRepository.TryInsertAsync(reservation, cancellationToken);
+
+        public Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
+            DateTimeOffset now,
+            int batchSize,
+            CancellationToken cancellationToken = default) =>
+            innerRepository.GetExpiredReservationsAsync(now, batchSize, cancellationToken);
+
+        public async Task<bool> TryExpireAsync(
+            Guid candidateReservationId,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default)
+        {
+            if (candidateReservationId == reservationId &&
+                Interlocked.Exchange(ref hasGatedExpiration, 1) == 0)
+            {
+                TryExpireStarted.TrySetResult();
+                await ContinueTryExpire.Task.WaitAsync(cancellationToken);
+            }
+
+            return await innerRepository.TryExpireAsync(
+                candidateReservationId,
+                now,
+                cancellationToken);
+        }
+
+        public Task<bool> TryExpireRetainedReservationForSeatAsync(
+            Guid eventId,
+            Guid seatId,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            innerRepository.TryExpireRetainedReservationForSeatAsync(
+                eventId,
+                seatId,
+                now,
+                cancellationToken);
     }
 }

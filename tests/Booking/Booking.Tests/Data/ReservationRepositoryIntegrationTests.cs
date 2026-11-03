@@ -18,7 +18,7 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
         var expiredReservation = CreateRetainedReservation();
         expiredReservation.ExpiresAt = now;
         var futureReservation = CreateRetainedReservation();
-        futureReservation.ExpiresAt = now.AddTicks(1);
+        futureReservation.ExpiresAt = now.AddMilliseconds(1);
         var confirmedReservation = CreateRetainedReservation();
         confirmedReservation.Status = ReservationStatus.Confirmed;
         confirmedReservation.ExpiresAt = now.AddMinutes(-1);
@@ -91,6 +91,63 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
             .AsNoTracking()
             .SingleAsync();
         Assert.Equal(ReservationStatus.Expired, storedReservation.Status);
+    }
+
+    [Fact]
+    public async Task TryExpireRetainedReservationForSeatAsync_WhenMatchingRetainedReservationIsExpired_ExpiresIt()
+    {
+        await fixture.ResetAsync();
+        var now = DateTimeOffset.UtcNow;
+        var reservation = CreateRetainedReservation();
+        reservation.ExpiresAt = now;
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.Add(reservation);
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+
+        var expired = await repository.TryExpireRetainedReservationForSeatAsync(
+            reservation.EventId,
+            reservation.SeatId,
+            now);
+
+        Assert.True(expired);
+        var storedReservation = await dbContext.Reservations
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal(ReservationStatus.Expired, storedReservation.Status);
+    }
+
+    [Theory]
+    [InlineData(ReservationStatus.Confirmed, -1)]
+    [InlineData(ReservationStatus.Retained, 1)]
+    public async Task TryExpireRetainedReservationForSeatAsync_WhenReservationIsNotExpiredRetained_DoesNotExpire(
+        ReservationStatus status,
+        int expiryOffsetSeconds)
+    {
+        await fixture.ResetAsync();
+        var now = DateTimeOffset.UtcNow;
+        var reservation = CreateRetainedReservation();
+        reservation.Status = status;
+        reservation.ExpiresAt = now.AddSeconds(expiryOffsetSeconds);
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.Add(reservation);
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+
+        var expired = await repository.TryExpireRetainedReservationForSeatAsync(
+            reservation.EventId,
+            reservation.SeatId,
+            now);
+
+        Assert.False(expired);
+        var storedReservation = await dbContext.Reservations
+            .AsNoTracking()
+            .SingleAsync();
+        Assert.Equal(status, storedReservation.Status);
     }
 
     [Fact]
@@ -302,6 +359,9 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
 
         var seatConflictResult = await losingRepository.TryInsertAsync(losingReservation);
         Assert.Equal(ReservationInsertOutcome.SeatTaken, seatConflictResult.Outcome);
+        Assert.Equal(
+            EntityState.Detached,
+            losingDbContext.Entry(losingReservation).State);
 
         losingReservation.Status = ReservationStatus.Rejected;
         losingReservation.RejectionReason = ReservationRejectionReason.SeatTaken;
@@ -322,6 +382,33 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
         Assert.Contains(storedReservations, reservation =>
             reservation.Status == ReservationStatus.Rejected &&
             reservation.RejectionReason == ReservationRejectionReason.SeatTaken);
+    }
+
+    [Fact]
+    public async Task TryInsertAsync_WhenPartialUniqueIndexRaises23505_ReturnsSeatTakenAndDetachesAttempt()
+    {
+        await fixture.ResetAsync();
+        var eventId = Guid.NewGuid();
+        var seatId = Guid.NewGuid();
+        var activeReservation = CreateRetainedReservation(Guid.NewGuid(), eventId, seatId);
+        var conflictingReservation = CreateRetainedReservation(Guid.NewGuid(), eventId, seatId);
+
+        await using var dbContext = fixture.CreateDbContext();
+        var repository = new ReservationRepository(dbContext);
+        Assert.Equal(
+            ReservationInsertOutcome.Created,
+            (await repository.TryInsertAsync(activeReservation)).Outcome);
+
+        var conflictResult = await repository.TryInsertAsync(conflictingReservation);
+
+        Assert.Equal(ReservationInsertOutcome.SeatTaken, conflictResult.Outcome);
+        Assert.Equal(EntityState.Detached, dbContext.Entry(conflictingReservation).State);
+
+        var unrelatedReservation = CreateRetainedReservation();
+        var subsequentInsert = await repository.TryInsertAsync(unrelatedReservation);
+
+        Assert.Equal(ReservationInsertOutcome.Created, subsequentInsert.Outcome);
+        Assert.Equal(EntityState.Detached, dbContext.Entry(conflictingReservation).State);
     }
 
     private static Reservation CreateRetainedReservation(
