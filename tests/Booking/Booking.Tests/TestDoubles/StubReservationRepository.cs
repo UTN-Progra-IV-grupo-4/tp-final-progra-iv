@@ -11,6 +11,7 @@ public sealed class StubReservationRepository : IReservationRepository
     private readonly HashSet<Guid> expirationFailures = [];
 
     public IReadOnlyList<Reservation> AttemptedReservations => attemptedReservations;
+    public List<int> ExpirationBatchSizes { get; } = [];
     public List<(Guid ReservationId, DateTimeOffset Now)> ExpirationAttempts { get; } = [];
     public List<(Guid EventId, Guid SeatId, DateTimeOffset Now)> SeatExpirationAttempts { get; } = [];
 
@@ -42,13 +43,18 @@ public sealed class StubReservationRepository : IReservationRepository
 
     public Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
         DateTimeOffset now,
+        int batchSize,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        ExpirationBatchSizes.Add(batchSize);
         IReadOnlyList<Reservation> reservations = expiredReservations
             .Where(reservation =>
                 reservation.Status == ReservationStatus.Retained &&
                 reservation.ExpiresAt <= now)
+            .OrderBy(reservation => reservation.ExpiresAt)
+            .ThenBy(reservation => reservation.Id)
+            .Take(batchSize)
             .ToList();
         return Task.FromResult(reservations);
     }
@@ -62,11 +68,21 @@ public sealed class StubReservationRepository : IReservationRepository
         ExpirationAttempts.Add((reservationId, now));
         var reservation = expiredReservations.SingleOrDefault(
             candidate => candidate.Id == reservationId);
-        return Task.FromResult(
-            reservation is not null &&
-            reservation.Status == ReservationStatus.Retained &&
-            reservation.ExpiresAt <= now &&
-            !expirationFailures.Contains(reservationId));
+        if (reservation is null ||
+            reservation.Status != ReservationStatus.Retained ||
+            reservation.ExpiresAt > now)
+        {
+            return Task.FromResult(false);
+        }
+
+        if (expirationFailures.Contains(reservationId))
+        {
+            reservation.Status = ReservationStatus.Confirmed;
+            return Task.FromResult(false);
+        }
+
+        reservation.Status = ReservationStatus.Expired;
+        return Task.FromResult(true);
     }
 
     public Task<bool> TryExpireRetainedReservationForSeatAsync(

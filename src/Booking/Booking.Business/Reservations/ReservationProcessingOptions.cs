@@ -7,4 +7,6 @@ public sealed class ReservationProcessingOptions
     public TimeSpan RetentionDuration { get; set; }
 
     public TimeSpan ExpirationCheckInterval { get; set; }
+
+    public int ExpirationBatchSize { get; set; }
 }

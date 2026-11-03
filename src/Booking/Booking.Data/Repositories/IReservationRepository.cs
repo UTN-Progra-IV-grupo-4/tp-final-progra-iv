@@ -2,6 +2,7 @@ using Booking.Data.Models;
 
 namespace Booking.Data.Repositories;
 
+// State transitions must be conditional updates; payment confirmation must also require ExpiresAt > now.
 public interface IReservationRepository
 {
     Task<ReservationInsertResult> TryInsertAsync(
@@ -10,6 +11,7 @@ public interface IReservationRepository
 
     Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
         DateTimeOffset now,
+        int batchSize,
         CancellationToken cancellationToken = default);
 
     Task<bool> TryExpireAsync(

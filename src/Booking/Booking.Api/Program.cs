@@ -25,6 +25,9 @@ builder.Services
     .Validate(
         options => options.ExpirationCheckInterval > TimeSpan.Zero,
         $"{nameof(ReservationProcessingOptions.ExpirationCheckInterval)} must be greater than zero.")
+    .Validate(
+        options => options.ExpirationBatchSize > 0,
+        $"{nameof(ReservationProcessingOptions.ExpirationBatchSize)} must be greater than zero.")
     .ValidateOnStart();
 builder.Services.AddHostedService<ExpiredReservationsBackgroundService>();
 builder.Services.AddBookingMessaging(builder.Configuration);

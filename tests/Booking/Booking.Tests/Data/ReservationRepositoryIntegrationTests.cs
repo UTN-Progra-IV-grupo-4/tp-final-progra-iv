@@ -3,6 +3,7 @@ using Booking.Data.Models;
 using Booking.Data.Repositories;
 using Booking.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Booking.Tests.Data;
 
@@ -34,10 +35,39 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
 
         var repository = new ReservationRepository(dbContext);
 
-        var expiredReservations = await repository.GetExpiredReservationsAsync(now);
+        var expiredReservations = await repository.GetExpiredReservationsAsync(now, 10);
 
         var reservation = Assert.Single(expiredReservations);
         Assert.Equal(expiredReservation.Id, reservation.Id);
+    }
+
+    [Fact]
+    public async Task GetExpiredReservationsAsync_ReturnsEarliestReservationsWithinBatchSize()
+    {
+        await fixture.ResetAsync();
+        var now = DateTimeOffset.UtcNow;
+        var reservations = new[]
+        {
+            CreateRetainedReservation(),
+            CreateRetainedReservation(),
+            CreateRetainedReservation()
+        };
+        reservations[0].ExpiresAt = now.AddMinutes(-1);
+        reservations[1].ExpiresAt = now.AddMinutes(-3);
+        reservations[2].ExpiresAt = now.AddMinutes(-2);
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.AddRange(reservations);
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+
+        var expiredReservations = await repository.GetExpiredReservationsAsync(now, 2);
+
+        Assert.Equal(2, expiredReservations.Count);
+        Assert.Equal(
+            new[] { reservations[1].Id, reservations[2].Id },
+            expiredReservations.Select(reservation => reservation.Id));
     }
 
     [Fact]
@@ -88,7 +118,11 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
             var expirationRepository = new ReservationRepository(expirationDbContext);
             var useCase = new ExpireRetainedReservations(
                 expirationRepository,
-                new FixedTimeProvider(now));
+                new FixedTimeProvider(now),
+                Options.Create(new ReservationProcessingOptions
+                {
+                    ExpirationBatchSize = 100
+                }));
 
             var result = await useCase.ExecuteAsync();
 

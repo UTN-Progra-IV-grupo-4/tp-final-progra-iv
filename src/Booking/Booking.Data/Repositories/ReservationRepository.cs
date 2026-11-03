@@ -55,19 +55,28 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
 
     public async Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
         DateTimeOffset now,
-        CancellationToken cancellationToken = default) =>
-        await dbContext.Reservations
+        int batchSize,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
+
+        return await dbContext.Reservations
             .AsNoTracking()
             .Where(reservation =>
                 reservation.Status == ReservationStatus.Retained &&
                 reservation.ExpiresAt <= now)
+            .OrderBy(reservation => reservation.ExpiresAt)
+            .ThenBy(reservation => reservation.Id)
+            .Take(batchSize)
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<bool> TryExpireAsync(
         Guid reservationId,
         DateTimeOffset now,
         CancellationToken cancellationToken = default)
     {
+        // Keep the state and expiry checks in the UPDATE to prevent stale reads from racing with other transitions.
         var updatedCount = await dbContext.Reservations
             .Where(reservation =>
                 reservation.Id == reservationId &&
@@ -88,6 +97,7 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
         DateTimeOffset now,
         CancellationToken cancellationToken = default)
     {
+        // Recheck the seat, state, and expiry atomically before releasing the seat.
         var updatedCount = await dbContext.Reservations
             .Where(reservation =>
                 reservation.EventId == eventId &&

@@ -65,6 +65,8 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
 
             if (expiredReservation)
             {
+                // Retry once: if the seat is still taken, another consumer won the race,
+                // so return SeatTaken instead of continuing in a loop.
                 insertResult = await reservationRepository.TryInsertAsync(
                     retainedReservation,
                     cancellationToken);
