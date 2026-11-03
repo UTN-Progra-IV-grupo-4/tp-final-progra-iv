@@ -199,6 +199,18 @@ Nobody pushes directly to `main` or `develop`: both are protected by a ruleset.
 - At least **1 approval** from another team member is required, so nobody merges their own PR.
 - Releases merge `develop` → `main`, and the cards are moved to **Prod** by hand.
 
+### Continuous integration
+
+`.github/workflows/ci.yml` builds `TpFinal.sln` and runs every test project in it on each PR into `develop` and on each push to `develop`. The integration tests start PostgreSQL with Testcontainers, so they need a running Docker daemon (Docker Desktop locally; the GitHub runner already has one).
+
+Run the same steps locally before opening a PR:
+
+```bash
+dotnet restore TpFinal.sln
+dotnet build TpFinal.sln --no-restore --configuration Release
+dotnet test TpFinal.sln --no-build --configuration Release
+```
+
 ### Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`, for example `feat(booking): consume reservation requests`.
