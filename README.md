@@ -42,6 +42,7 @@ Message Broker ──────── │
 ## Services
 
 ### Availability
+- Issue #12: [modelo, configuración de PostgreSQL, migraciones y pendientes de integración](docs/availability-12.md).
 - Exposes seat availability queries (public, no auth required)
 - Accepts reservation requests and publishes them to the broker
 - Delegates reservation status queries to Booking
@@ -76,12 +77,50 @@ Agreed by the team and validated by the professor. Each decision has its own iss
 | Area | Decision | Notes |
 |------|----------|-------|
 | Platform | .NET 10, single solution (`TpFinal.sln`) | Services never reference each other; only `Contracts` is shared |
-| Database | PostgreSQL with Entity Framework Core (Npgsql) | One container, one database per service, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
+| Database | PostgreSQL with Entity Framework Core (Npgsql) | One PostgreSQL container with three logical databases, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
 | Authorization server | Keycloak, running as a container | OIDC for users and client credentials between services ([#5](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)) |
-| Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
-| Running everything | Docker Compose, one command | Planned in [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3) |
+| Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes; RabbitMQ exists as local fallback profile ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
+| Local infrastructure | Docker Compose | PostgreSQL and Keycloak from [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3); service containers are added as implemented |
 
 Secrets, such as the Service Bus connection string, live in a local `.env` file or in `dotnet user-secrets` and are **never committed**: the repository is public. Only `.env.example` with empty values is versioned.
+
+## Local Infrastructure (Docker Compose)
+
+1. Create your local env file from the template:
+
+```bash
+cp .env.example .env
+```
+
+On PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+2. Fill required variables in `.env`.
+
+3. Start core infrastructure (PostgreSQL + Keycloak):
+
+```bash
+docker compose up -d
+```
+
+4. Start infrastructure including RabbitMQ fallback:
+
+```bash
+docker compose --profile rabbitmq up -d
+```
+
+5. Stop and remove containers:
+
+```bash
+docker compose down
+```
+
+> The PostgreSQL init script in `docker/postgres/init-multiple-dbs.sh` only runs when the database volume is empty. If you change DB names, users, or passwords, recreate the database volume with `docker compose down -v` before `docker compose up -d`.
+>
+> Avoid passwords containing a single quote (`'`), because that breaks the SQL script. Use a simple value such as letters, numbers and symbols like `-` or `_`.
 
 ## Reservation Flow
 
@@ -161,6 +200,18 @@ Nobody pushes directly to `main` or `develop`: both are protected by a ruleset.
 - At least **1 approval** from another team member is required, so nobody merges their own PR.
 - Releases merge `develop` → `main`, and the cards are moved to **Prod** by hand.
 
+### Continuous integration
+
+`.github/workflows/ci.yml` builds `TpFinal.sln` and runs every test project in it on each PR into `develop` and on each push to `develop`. The integration tests start PostgreSQL with Testcontainers, so they need a running Docker daemon (Docker Desktop locally; the GitHub runner already has one).
+
+Run the same steps locally before opening a PR:
+
+```bash
+dotnet restore TpFinal.sln
+dotnet build TpFinal.sln --no-restore --configuration Release
+dotnet test TpFinal.sln --no-build --configuration Release
+```
+
 ### Commits
 
 [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`, for example `feat(booking): consume reservation requests`.
@@ -176,3 +227,19 @@ Allowed types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `build`, `ci`
 | Seat    | Physical place to sit                   |
 | Booking | The rental of a physical seat           |
 | Payment | Finalization of a physical seat rental  |
+
+## Interpretación de componentes
+
+| Componente | Rol | Justificación |
+|------------|-----|--------------|
+| Availability Site | Permite consultar asientos disponibles, solicitar reservas y consultar sus resultados. | Es el punto de entrada del usuario. Recibe las solicitudes y las publica en el broker sin esperar el resultado del procesamiento. |
+| Message Broker (Azure Service Bus) | Gestiona la comunicación asíncrona entre Availability y Booking. | Desacopla los servicios: Availability publica en un topic y las réplicas de Booking consumen de una subscription, de modo que cada solicitud la procesa una sola réplica. |
+| Booking REST API | Gestiona las reservas, controla sus estados y solicita los pagos. | Centraliza las reglas de reserva y debe impedir que dos usuarios reserven simultáneamente el mismo asiento. |
+| Payment gRPC API | Procesa las solicitudes de cobro realizadas por Booking mediante gRPC. | Separa la responsabilidad de los pagos de la gestión de reservas. |
+| Authorization Server (Keycloak) | Gestiona la autenticación y autorización mediante tokens. | Protege las operaciones de reserva (OIDC para los usuarios) y autentica las comunicaciones entre microservicios (client credentials). |
+| Proveedores de identidad de terceros | Permiten integrar la autenticación con proveedores externos. | Facilitan la autenticación de usuarios mediante servicios de identidad externos. |
+| Bases de datos SQL (PostgreSQL) | Almacenan la información correspondiente a cada servicio. | Garantizan la persistencia de solicitudes, reservas y pagos, con una base y un usuario por servicio para mantener separados los datos de los microservicios. |
+| Direcciones IP públicas | Permiten el acceso externo al sitio Availability. | Proporcionan un punto de acceso público para que los usuarios puedan interactuar con el sistema. |
+| Servicio de notificaciones | Informa al usuario cuando su reserva fue creada y cuando fue confirmada después de un pago exitoso. | Desacopla el envío de notificaciones del procesamiento de reservas (punto 3.h del enunciado). No se implementa: solo figura en los diagramas. |
+
+**Nota:** El servicio de notificaciones es una incorporación requerida por el punto 3.h del enunciado y no forma parte del diagrama original de arquitectura.

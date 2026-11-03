@@ -57,6 +57,9 @@ namespace Booking.Data.Migrations
                         .IsUnique()
                         .HasFilter("\"status\" IN ('Retained', 'Confirmed')");
 
+                    b.HasIndex("ExpiresAt", "Id")
+                        .HasFilter("\"status\" = 'Retained'");
+
                     b.ToTable("reservations", (string)null);
                 });
 #pragma warning restore 612, 618
