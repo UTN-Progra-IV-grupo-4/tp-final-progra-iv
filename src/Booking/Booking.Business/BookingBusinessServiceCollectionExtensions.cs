@@ -17,6 +17,7 @@ public static class BookingBusinessServiceCollectionExtensions
 
         // Comparte el ámbito con el repositorio y el contexto.
         services.AddScoped<ReservationStatusService>();
+        services.AddScoped<OccupiedSeatsService>();
 
         return services;
     }
