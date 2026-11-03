@@ -14,9 +14,9 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <ProjectReference Include="..\..\src\Availability\Availability.Infrastructure\Availability.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Availability\Availability.Infrastructure\Availability.Infrastructure.csproj" />
     <None Update="constraints.sql" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\..\src\Availability\Availability.Infrastructure\Persistence\Scripts\demo-data.sql"
+    <None Include="..\..\..\src\Availability\Availability.Infrastructure\Persistence\Scripts\demo-data.sql"
           Link="demo-data.sql" CopyToOutputDirectory="PreserveNewest" />
     <Using Include="Xunit" />
   </ItemGroup>

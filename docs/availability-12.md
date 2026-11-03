@@ -104,21 +104,25 @@ Dentro de psql, `\dt` lista las tablas; `SELECT * FROM events;` y `SELECT * FROM
 Con Docker Desktop iniciado:
 
 ```bash
-dotnet test tests/Availability.Database/Availability.Database.Tests.csproj
+dotnet test tests/Availability/Availability.Tests/Availability.Tests.csproj
 ```
 
 El proyecto está incluido en TpFinal.sln y también se descubre con `dotnet test TpFinal.sln`. Compilar no ejecuta los tests. Testcontainers inicia PostgreSQL 16 en contenedores descartables con puertos aleatorios, sin .env, compose ni secretos locales. Las credenciales constantes de la fixture son solo para esos contenedores de prueba.
+
+Las clases de integración usan `[Collection(PostgreSqlCollection.Name)]` para compartir una fixture y ejecutar las pruebas sin concurrencia sobre la misma base. ResetAsync obtiene las tablas del modelo de EF Core y conserva el historial de migraciones. La prueba de actualización usa otro contenedor aislado porque necesita comenzar con el esquema anterior.
+
+La ejecución automática en GitHub Actions se implementa por separado en #41. Hasta que exista ese workflow, hay que ejecutar los comandos de tests localmente; no se disparan por subir un commit.
 
 Se comprueban las migraciones sobre una base vacía, el renombrado conservando datos existentes, la ejecución repetida del seed y la escritura/lectura UTC mediante EF Core. Las restricciones se verifican ejecutando automáticamente constraints.sql, omitiendo únicamente los metacomandos de psql. Ese SQL prueba unicidad, claves foráneas, solicitudes múltiples y borrados restringidos, y revierte sus registros temporales.
 
 El script sigue disponible para una comprobación manual después de migrar:
 
 ```bash
-docker exec -i postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < tests/Availability.Database/constraints.sql
+docker exec -i postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < tests/Availability/Availability.Tests/constraints.sql
 ```
 
 ## Alcance
 
-El #12 no implementa pantallas (#13/#16), login (#14), publicación y mapper (#15), consumo (#18), cobros ni la demo completa del PDF. Esos trabajos deben reutilizar este modelo y coordinar los contratos compartidos. Conservar el historial real de prompts por integrante según #9; esta guía no lo sustituye.
+El #12 no implementa pantallas (#13/#16), login (#14), publicación y mapper (#15), consumo (#18), cobros ni la demo completa del PDF. Esos trabajos deben reutilizar este modelo y coordinar los contratos compartidos.
 
 Referencias: [Npgsql para EF Core](https://www.npgsql.org/efcore/) y [fábrica de contexto para migraciones](https://learn.microsoft.com/en-us/ef/core/cli/dbcontext-creation).

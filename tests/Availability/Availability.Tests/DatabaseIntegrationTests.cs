@@ -5,10 +5,11 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Testcontainers.PostgreSql;
 
-namespace Availability.Database.Tests;
+namespace Availability.Tests;
 
-// xUnit ejecuta secuencialmente los tests de esta clase porque comparten la fixture.
-public sealed class DatabaseIntegrationTests(PostgreSqlFixture fixture) : IClassFixture<PostgreSqlFixture>
+// Las clases de esta colección comparten una fixture y se ejecutan sin concurrencia.
+[Collection(PostgreSqlCollection.Name)]
+public sealed class DatabaseIntegrationTests(PostgreSqlFixture fixture)
 {
     [Fact]
     public async Task Migrations_OnEmptyDatabase_CreateCurrentSchema()

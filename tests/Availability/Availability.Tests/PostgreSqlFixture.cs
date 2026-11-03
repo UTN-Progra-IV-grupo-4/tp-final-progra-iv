@@ -1,8 +1,10 @@
 using Availability.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Testcontainers.PostgreSql;
 
-namespace Availability.Database.Tests;
+namespace Availability.Tests;
 
 // Base descartable con puerto aleatorio: no usa el compose, el .env ni datos locales.
 public sealed class PostgreSqlFixture : IAsyncLifetime
@@ -35,6 +37,12 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
     {
         // Solo se ejecuta dentro del contenedor de tests, aislado de las bases del equipo.
         await using var context = CreateDbContext();
-        await context.Database.ExecuteSqlRawAsync("TRUNCATE TABLE reservation_requests, seats, events;");
+        // Los identificadores provienen del modelo de EF, nunca de entradas externas.
+        // La tabla de historial de migraciones no forma parte de este modelo.
+        var sqlHelper = context.GetService<ISqlGenerationHelper>();
+        var tableNames = context.Model.GetRelationalModel().Tables
+            .Select(table => sqlHelper.DelimitIdentifier(table.Name, table.Schema));
+        var sql = "TRUNCATE TABLE " + string.Join(", ", tableNames) + ";";
+        await context.Database.ExecuteSqlRawAsync(sql);
     }
 }
