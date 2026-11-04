@@ -57,7 +57,7 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
         Status = result.Outcome == ChargeOutcome.Approved
             ? ChargeStatus.Approved
             : ChargeStatus.Declined,
-        ChargeId = result.PaymentId.ToString(),
+        ChargeId = result.ChargeId.ToString(),
         // Los string de Protobuf no aceptan null.
         FailureReason = result.DeclineReason ?? string.Empty
     };

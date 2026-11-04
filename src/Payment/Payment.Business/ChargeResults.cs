@@ -7,7 +7,7 @@ public enum ChargeOutcome { Approved, Declined }
 // record : Es inmutable y compara por valor, así que dos resultados con los mismos datos son iguales.
 public sealed record ChargeResult(
     Guid ReservationId,
-    Guid PaymentId,
+    Guid ChargeId,
     ChargeOutcome Outcome,
     string? DeclineReason,
     bool IsReplay);

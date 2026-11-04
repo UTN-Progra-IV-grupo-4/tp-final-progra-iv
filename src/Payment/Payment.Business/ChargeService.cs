@@ -135,7 +135,7 @@ public class ChargeService(
 
     private static ChargeResult ToResult(Charge charge, bool isReplay) => new(
         ReservationId: charge.ReservationId,
-        PaymentId: charge.Id,
+        ChargeId: charge.Id,
         Outcome: charge.Status == ChargeStatus.Approved ? ChargeOutcome.Approved : ChargeOutcome.Declined,
         DeclineReason: charge.FailureReason,
         IsReplay: isReplay);
