@@ -75,10 +75,11 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
         // atar la presentación al ORM; EF la envuelve al guardar, por eso se mira también InnerException.
         DbException { IsTransient: true } or { InnerException: DbException { IsTransient: true } }
             => StatusCode.Unavailable,
-        // Antes que InvalidOperationException porque hereda de ella: es un bug, no un cobro en curso.
-        ObjectDisposedException => StatusCode.Internal,
         // Cobro en curso (Pending): ABORTED y no UNAVAILABLE, porque Payment sí está accesible.
-        InvalidOperationException => StatusCode.Aborted,
+        ChargeInProgressException => StatusCode.Aborted,
+        // Inconsistencia o bug (incluye ObjectDisposedException, que hereda de esta): reintentar
+        // no lo arregla, así que va a revisión manual en vez de gastar los reintentos de Booking.
+        InvalidOperationException => StatusCode.Internal,
         // Mismo reservation_id con otro monto o moneda: reintentar no lo arregla, requiere revisión.
         ChargeMismatchException => StatusCode.InvalidArgument,
         // Modo simulado mal configurado: reintentar no lo arregla.

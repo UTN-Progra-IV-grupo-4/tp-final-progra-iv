@@ -79,8 +79,7 @@ public class ChargeService(
                 // La falla anterior fue técnica: reclamamos el cobro para intentarlo de nuevo.
                 // Si otro pedido lo reclamó primero, no cobramos.
                 if (!await charges.TryReclaimFailedAsync(existing.Id, cancellationToken))
-                    throw new InvalidOperationException(
-                        $"Ya hay un cobro en curso para la reserva {existing.ReservationId}.");
+                    throw new ChargeInProgressException(existing.ReservationId);
 
                 existing.Status = ChargeStatus.Pending;
                 logger.LogInformation(
@@ -90,10 +89,10 @@ public class ChargeService(
 
             case ChargeStatus.Pending:
                 // Otro pedido está cobrando en este momento: todavía no hay resultado que devolver.
-                throw new InvalidOperationException(
-                    $"Ya hay un cobro en curso para la reserva {existing.ReservationId}.");
+                throw new ChargeInProgressException(existing.ReservationId);
 
             default:
+                // Bug, no un cobro en curso: la capa gRPC lo responde INTERNAL para que no se reintente.
                 throw new InvalidOperationException($"Estado de cobro inesperado: {existing.Status}.");
         }
     }
