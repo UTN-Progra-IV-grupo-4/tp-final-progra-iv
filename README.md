@@ -66,9 +66,12 @@ Booking separates its REST entry point (`Booking.Api`), business layer (`Booking
 - Notifies users when a reservation is created and confirmed after successful payment
 - **Out of implementation scope** (confirmed by the professor): it is only drawn in the architecture diagrams, so it needs no subscription on the broker
 
-### Authorization Server
-- Issues tokens for authenticated users
-- All inter-service communication is authenticated
+### Authorization Server (Keycloak)
+- Issues tokens for authenticated users via OpenID Connect (OIDC)
+- Supports Client Credentials flow for inter-service authentication
+- Manages users, roles, and OAuth clients
+- **Configuration:** Realm export in `infra/keycloak/realm-export.json`
+- **Documentation:** See [infra/keycloak/README.md](infra/keycloak/README.md)
 
 ## Technical Decisions
 
@@ -135,7 +138,7 @@ docker compose down
 
 ## Getting started
 
-Requires the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
+Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
 
 ```
 TpFinal.sln
@@ -144,6 +147,10 @@ src/
   Booking/Booking.Api                  REST API
   Payment/Payment.Grpc                 gRPC API
   Contracts/                           .proto files and messages, the only shared project
+infra/
+  keycloak/                            Keycloak configuration and realm export
+docker/
+  postgres/                            PostgreSQL initialization scripts
 ```
 
 Services never reference each other: they only talk over HTTP, gRPC or the broker, and the only project they may share is `Contracts`.

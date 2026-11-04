@@ -44,12 +44,19 @@ services:
     image: quay.io/keycloak/keycloak:26.0.7
     container_name: keycloak
     restart: unless-stopped
-    command: ["start-dev"]
+    command: ["start-dev", "--import-realm"]
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:?set KEYCLOAK_ADMIN in .env}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KEYCLOAK_AVAILABILITY_CLIENT_SECRET: ${KEYCLOAK_AVAILABILITY_CLIENT_SECRET:?set KEYCLOAK_AVAILABILITY_CLIENT_SECRET in .env}
+      KEYCLOAK_BOOKING_CLIENT_SECRET: ${KEYCLOAK_BOOKING_CLIENT_SECRET:?set KEYCLOAK_BOOKING_CLIENT_SECRET in .env}
+      KEYCLOAK_PAYMENT_CLIENT_SECRET: ${KEYCLOAK_PAYMENT_CLIENT_SECRET:?set KEYCLOAK_PAYMENT_CLIENT_SECRET in .env}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
     ports:
       - "${KEYCLOAK_PORT:-8080}:8080"
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     networks:
       - seat-reservation-net
 
