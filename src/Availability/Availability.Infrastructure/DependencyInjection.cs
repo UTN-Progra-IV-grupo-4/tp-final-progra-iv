@@ -27,7 +27,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, postgres => postgres.SetPostgresVersion(16, 0));
         });
 
-        services.AddScoped<IReservationRequestRepository, InMemoryReservationRequestRepository>();
+        services.AddScoped<IReservationRequestRepository, ReservationRequestRepository>();
 
         services.AddScoped<IMessagePublisher>(provider =>
         {
