@@ -1,3 +1,4 @@
+using Availability.Infrastructure;
 using Availability.Web.Abstractions;
 using Availability.Web.Application;
 using Availability.Web.Infrastructure;
@@ -21,6 +22,9 @@ builder.Services.AddScoped<IMessagePublisher>(provider =>
 });
 
 builder.Services.AddScoped<ReservationRequestHandler>();
+
+// Web conecta las capas al iniciar; los futuros controladores utilizarán Application.
+builder.Services.AddInfrastructure(builder.Configuration.GetConnectionString("Availability"));
 
 var app = builder.Build();
 
