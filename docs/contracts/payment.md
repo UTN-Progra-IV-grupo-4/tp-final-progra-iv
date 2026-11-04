@@ -40,11 +40,12 @@ Un rechazo de negocio viaja en la respuesta. Un error técnico viaja como códig
 | `OK` + `APPROVED` | Cobro aprobado | Confirma la reserva. |
 | `OK` + `DECLINED` | Rechazo de negocio | Rechaza con motivo `PaymentFailed`. |
 | `ABORTED` | Hay un cobro en curso para esta reserva (`Pending`) | Reintenta con la misma clave, sin cobrar de nuevo. |
-| `UNAVAILABLE` | Payment no responde | Reintenta. Si se agotan los reintentos, rechaza con `PaymentUnavailable` y registra "posible cobro tardío, resultado desconocido". |
+| `UNAVAILABLE` | Falla transitoria: Payment no responde, la pasarela tuvo un error técnico (el cobro quedó `Failed`, sin cargo) o la base de Payment no está disponible | Reintenta con la misma clave. Si se agotan los reintentos, rechaza con `PaymentUnavailable` y registra "posible cobro tardío, resultado desconocido". |
 | `DEADLINE_EXCEEDED` | Payment no respondió dentro del deadline de Booking | Igual que `UNAVAILABLE`. |
-| `INTERNAL` | Error técnico de la pasarela. El cobro quedó en `Failed` | Igual que `UNAVAILABLE`. Pendiente de confirmar en #19. |
-| `INVALID_ARGUMENT` | Datos inválidos, moneda no soportada o mismo `reservation_id` con otro monto o moneda | Error de configuración o de implementación. No rechaza la reserva automáticamente. Pendiente de definir en #19. |
-| `UNAUTHENTICATED` / `PERMISSION_DENIED` | Token inválido o sin el rol necesario | Error de configuración. Autenticación definida en #11. |
+| `INVALID_ARGUMENT` | Datos inválidos, moneda no soportada o mismo `reservation_id` con otro monto o moneda | No reintenta. Deriva el mensaje a la DLQ para revisión manual; la reserva queda retenida hasta que vence. |
+| `INTERNAL` | Error interno de Payment que reintentar no arregla (por ejemplo, un modo simulado mal configurado) | No reintenta. Lo trata como respuesta inesperada y lo deriva a revisión manual. |
+| `UNKNOWN` | Excepción no prevista, incluido un error de base no transitorio (credenciales, SQL) | Igual que `INTERNAL`. |
+| `UNAUTHENTICATED` / `PERMISSION_DENIED` | Token inválido o sin el rol necesario | Error de configuración. Fuera del alcance de este PR: lo implementa #11 (ver sección 9). |
 
 ## 4. Estados del cobro
 
@@ -100,7 +101,7 @@ Se elige con `SimulatedGateway:Mode` por variable de entorno, sin depender del m
 | `Approve` | Cobro aprobado | Happy path |
 | `Decline` | Rechazo por fondos insuficientes | Pago fallido |
 | `Slow` | Demora `SlowDelaySeconds` (15 s) y luego aprueba | Timeout de Booking y reintento idempotente |
-| `Error` | Excepción técnica, el cobro queda en `Failed` | Pago no disponible |
+| `Error` | Excepción técnica, el cobro queda en `Failed` y Payment responde `UNAVAILABLE` | Pago no disponible |
 
 Bajar el contenedor de Payment también cubre el caso "pago no disponible" desde el lado de Booking.
 
@@ -142,7 +143,7 @@ sequenceDiagram
                     P-->>S: excepción
                     S->>R: UpdateAsync (Failed)
                     S-->>G: Error técnico
-                    G-->>B: INTERNAL
+                    G-->>B: UNAVAILABLE
                 end
             end
         else Cobro previo con otro monto o moneda
@@ -170,18 +171,25 @@ sequenceDiagram
     end
 ```
 
-## 9. Decisiones abiertas
+## 9. Fuera de alcance
 
-Estas se resuelven en #19 (Booking), no en este contrato:
+| Tema | Estado | Detalle |
+|---|---|---|
+| Autenticación entre servicios | Pendiente en #11 | Payment hoy no valida tokens. #11 agrega client credentials con Keycloak; ahí aparecen `UNAUTHENTICATED` y `PERMISSION_DENIED`. |
+| Modo `Expire` de la pasarela | Descartado | La expiración de la reserva es de Booking (#19 y #20). Se prueba con su reloj controlado, no con una demora de Payment. |
+| RPC de consulta y de reembolso | Descartado en esta etapa | El cotejo y el reembolso son manuales (sección 6). |
 
-1. Qué hace Booking cuando agota los reintentos con `ABORTED`. Hoy el borrador del procesador relanza la excepción y deja la reserva `Retained` hasta que vence. Podría tratarse como resultado desconocido.
-2. Si `INTERNAL` se trata como `UNAVAILABLE` en Booking.
-3. Dónde se registra el "posible cobro tardío" de forma persistente, para que el cotejo sea encontrable.
-4. Cómo se maneja `INVALID_ARGUMENT`, porque hoy no rechaza la reserva y la deja retenida hasta el vencimiento.
-5. Valor del deadline gRPC de Booking. Tiene que ser menor que `SlowDelaySeconds` para que el modo `Slow` provoque el timeout.
+## 10. Acuerdos con Booking (#19)
 
-## 10. Historial
+1. `ABORTED` agotado: el mensaje va a la DLQ y la reserva queda `Retained` hasta que #20 la vence.
+2. Error técnico de la pasarela y base caída: `UNAVAILABLE`, que Booking reintenta.
+3. El "posible cobro tardío" queda en los logs de Booking (`ErrorCode=PaymentOutcomeUnknown`); el cotejo sigue la sección 6.
+4. `INVALID_ARGUMENT`: DLQ y revisión manual.
+5. Deadline gRPC de Booking: 5 s propuestos, configurable. Tiene que ser menor que `SlowDelaySeconds` para que el modo `Slow` provoque el timeout. Pendiente de implementar en el adaptador de Booking.
+
+## 11. Historial
 
 | Fecha | Cambio |
 |---|---|
 | 2026-11-02 | Versión inicial. Modo `Expire` fuera de alcance. Entidad `Charge`, tabla `charges`. |
+| 2026-11-04 | El error técnico de la pasarela y la base caída responden `UNAVAILABLE` (antes `INTERNAL`). Se documentan `INTERNAL`, `UNKNOWN` y lo que queda fuera de alcance. El documento pasa a `docs/contracts/`. |
