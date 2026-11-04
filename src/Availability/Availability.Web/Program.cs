@@ -8,7 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<IReservationRequestRepository, InMemoryReservationRequestRepository>();
 
-var brokerProvider = builder.Configuration["Broker:Provider"] ?? "ServiceBus";
+var brokerProvider = builder.Configuration["Broker:Provider"] ?? "AzureServiceBus";
 builder.Services.AddScoped<IMessagePublisher>(provider =>
 {
     if (string.Equals(brokerProvider, "RabbitMq", StringComparison.OrdinalIgnoreCase))
