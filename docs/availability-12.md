@@ -111,7 +111,7 @@ El proyecto está incluido en TpFinal.sln y también se descubre con `dotnet tes
 
 Las clases de integración usan `[Collection(PostgreSqlCollection.Name)]` para compartir una fixture y ejecutar las pruebas sin concurrencia sobre la misma base. ResetAsync obtiene las tablas del modelo de EF Core y conserva el historial de migraciones. La prueba de actualización usa otro contenedor aislado porque necesita comenzar con el esquema anterior.
 
-El workflow `.github/workflows/ci.yml` ejecuta la compilación y los tests de la solución en cada PR hacia `develop` y en cada push a `develop`. Los tests de PostgreSQL usan Testcontainers con Docker en el runner. Los comandos locales permiten verificar los cambios antes de subirlos; el README describe cómo ejecutar los mismos pasos que el CI.
+El workflow `.github/workflows/ci.yml` ejecuta la compilación y los tests de la solución en cada PR hacia `develop` o `main` y en cada push a esas ramas. Los tests de PostgreSQL usan Testcontainers con Docker en el runner. Los comandos locales permiten verificar los cambios antes de subirlos; el README describe cómo ejecutar los mismos pasos que el CI.
 
 Se comprueban las migraciones sobre una base vacía, el renombrado conservando datos existentes, la ejecución repetida del seed y la escritura/lectura UTC mediante EF Core. Las restricciones se verifican ejecutando automáticamente constraints.sql, omitiendo únicamente los metacomandos de psql. Ese SQL prueba unicidad, claves foráneas, solicitudes múltiples y borrados restringidos, y revierte sus registros temporales.
 

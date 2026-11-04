@@ -1,5 +1,6 @@
 using Availability.Application.ReservationRequests;
 using Availability.Infrastructure;
+using Availability.Infrastructure.Booking;
 using Availability.Web.Models;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
@@ -22,7 +23,8 @@ if (useDemoData && !builder.Environment.IsDevelopment())
 {
     throw new InvalidOperationException("El modo Demo solo está permitido en Development.");
 }
-builder.Services.AddEventQueries(useDemoData);
+var bookingOptions = builder.Configuration.GetSection("Booking").Get<BookingQueryOptions>() ?? new BookingQueryOptions();
+builder.Services.AddEventQueries(useDemoData, bookingOptions);
 builder.Services.AddSingleton(new EventDisplayOptions(useDemoData));
 
 // Cookie scheme as the default so [Authorize] challenges instead of throwing a 500.

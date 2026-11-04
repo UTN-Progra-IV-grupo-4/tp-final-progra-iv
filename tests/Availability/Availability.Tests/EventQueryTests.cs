@@ -34,7 +34,7 @@ public class EventQueryTests
     [Fact]
     public async Task UnavailableOccupancy_DoesNotReportFreeSeats()
     {
-        var result = await CreateQueries(new UnavailableSeatOccupancyQuery())
+        var result = await CreateQueries(new UnconfirmedSeatOccupancyStub())
             .GetSeatsAsync(DemoCatalogData.EventId(1));
         Assert.NotNull(result);
         Assert.False(result.OccupancyConfirmed);

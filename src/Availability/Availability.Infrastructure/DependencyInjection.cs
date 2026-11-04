@@ -1,18 +1,21 @@
-using Availability.Application.Events;
-using Availability.Infrastructure.Events;
 using Availability.Application.Abstractions;
+using Availability.Application.Events;
+using Availability.Infrastructure.Booking;
+using Availability.Infrastructure.Events;
 using Availability.Infrastructure.Messaging;
 using Availability.Infrastructure.Persistence;
 using Availability.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Availability.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddEventQueries(this IServiceCollection services, bool useDemoData)
+    public static IServiceCollection AddEventQueries(this IServiceCollection services, bool useDemoData,
+        BookingQueryOptions? bookingOptions = null)
     {
         services.AddScoped<EventQueryService>();
         if (useDemoData)
@@ -22,8 +25,16 @@ public static class DependencyInjection
         }
         else
         {
+            bookingOptions ??= new BookingQueryOptions();
+            var baseAddress = bookingOptions.GetBaseAddress();
+            var timeout = TimeSpan.FromSeconds(bookingOptions.TimeoutSeconds);
             services.AddScoped<IEventCatalog, EfEventCatalog>();
-            services.AddScoped<ISeatOccupancyQuery, UnavailableSeatOccupancyQuery>();
+            services.TryAddScoped<IBookingServiceTokenProvider, PendingBookingServiceTokenProvider>();
+            services.AddHttpClient<ISeatOccupancyQuery, BookingSeatOccupancyQuery>(client =>
+            {
+                client.BaseAddress = baseAddress;
+                client.Timeout = timeout;
+            });
         }
         return services;
     }

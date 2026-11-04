@@ -34,7 +34,7 @@ public class EventsControllerTests
     [Fact]
     public async Task UnknownOccupancy_DoesNotAllowSelection()
     {
-        var controller = CreateController(new UnavailableSeatOccupancyQuery());
+        var controller = CreateController(new UnconfirmedSeatOccupancyStub());
         var result = Assert.IsType<ViewResult>(await controller.Seats(DemoCatalogData.EventId(1),
             DemoCatalogData.SeatId(1, 1), default));
         Assert.Null(Assert.IsType<EventSeatsViewModel>(result.Model).SelectedSeatId);
