@@ -1,4 +1,6 @@
 using Booking.Api.Messaging;
+using Contracts;
+using System.Text.Json;
 
 namespace Booking.Tests.Messaging;
 
@@ -7,7 +9,7 @@ public sealed class ReservationRequestMapperTests
     private readonly ReservationRequestMapper mapper = new();
 
     [Fact]
-    public void Map_WhenPr35MessageIsValid_ReturnsBusinessCommand()
+    public void Map_WhenSharedContractMessageIsValid_ReturnsBusinessCommand()
     {
         var requestId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
@@ -22,6 +24,25 @@ public sealed class ReservationRequestMapperTests
         Assert.Equal(requestId, result.Request.RequestId);
         Assert.Equal(eventId, result.Request.EventId);
         Assert.Equal(seatId, result.Request.SeatId);
+    }
+
+    [Fact]
+    public void SharedContract_SerializesPublisherFieldsInCamelCase()
+    {
+        var requestId = Guid.NewGuid();
+        var delivery = CreateDelivery(requestId, Guid.NewGuid(), Guid.NewGuid(), requestId.ToString(),
+            requestId.ToString());
+
+        using var json = JsonDocument.Parse(delivery.Body.ToString());
+        var payload = json.RootElement;
+        Assert.Equal(requestId.ToString(), payload.GetProperty("messageId").GetGuid().ToString());
+        Assert.Equal(requestId.ToString(), payload.GetProperty("correlationId").GetString());
+        Assert.True(payload.TryGetProperty("eventId", out _));
+        Assert.True(payload.TryGetProperty("seatId", out _));
+        Assert.True(payload.TryGetProperty("userId", out _));
+        Assert.True(payload.TryGetProperty("requestedAt", out _));
+        Assert.False(payload.TryGetProperty("MessageId", out _));
+        Assert.True(mapper.Map(delivery).IsValid);
     }
 
     [Fact]
@@ -126,17 +147,15 @@ public sealed class ReservationRequestMapperTests
         string? messageId,
         string correlationId = "test-correlation-id")
     {
-        var body = BinaryData.FromString(
-            $$"""
-              {
-                "messageId": "{{requestId}}",
-                "correlationId": "{{correlationId}}",
-                "eventId": "{{eventId}}",
-                "seatId": "{{seatId}}",
-                "userId": "test-user",
-                "requestedAt": "2026-11-01T12:00:00Z"
-              }
-              """);
+        var body = BinaryData.FromObjectAsJson(new ReservationRequestMessage
+        {
+            MessageId = requestId,
+            CorrelationId = correlationId,
+            EventId = eventId,
+            SeatId = seatId,
+            UserId = "test-user",
+            RequestedAt = new DateTime(2026, 11, 1, 12, 0, 0, DateTimeKind.Utc)
+        });
 
         return new ReservationRequestDelivery(
             body,
