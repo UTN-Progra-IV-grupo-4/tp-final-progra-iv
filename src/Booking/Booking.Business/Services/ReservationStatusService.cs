@@ -7,12 +7,12 @@ namespace Booking.Business.Services;
 // Coordina la consulta del estado y su transformación al DTO.
 public class ReservationStatusService
 {
-    private readonly ReservationRepository _reservationRepository;
+    private readonly IReservationRepository _reservationRepository;
     private readonly TimeProvider _timeProvider;
 
     // Recibe el repositorio y el reloj mediante inyección de dependencias.
     public ReservationStatusService(
-        ReservationRepository reservationRepository,
+        IReservationRepository reservationRepository,
         TimeProvider timeProvider)
     {
         _reservationRepository = reservationRepository;

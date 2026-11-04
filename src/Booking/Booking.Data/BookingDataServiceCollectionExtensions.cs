@@ -11,11 +11,9 @@ public static class BookingDataServiceCollectionExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
 
         services.AddDbContext<BookingDbContext>(options => options.UseNpgsql(connectionString));
-        services.AddScoped<IReservationRepository, ReservationRepository>();
 
         // Usa el mismo ámbito por petición que BookingDbContext.
-        services.AddScoped<ReservationRepository>();
-
+        services.AddScoped<IReservationRepository, ReservationRepository>();
         return services;
     }
 }

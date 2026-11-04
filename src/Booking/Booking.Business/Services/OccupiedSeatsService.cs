@@ -6,12 +6,12 @@ namespace Booking.Business.Services;
 // Coordina la consulta de ocupación y construye su respuesta.
 public class OccupiedSeatsService
 {
-    private readonly ReservationRepository _reservationRepository;
+    private readonly IReservationRepository _reservationRepository;
     private readonly TimeProvider _timeProvider;
 
     // Recibe el acceso a datos y el reloj mediante inyección.
     public OccupiedSeatsService(
-        ReservationRepository reservationRepository,
+        IReservationRepository reservationRepository,
         TimeProvider timeProvider)
     {
         _reservationRepository = reservationRepository;
