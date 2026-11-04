@@ -68,19 +68,6 @@ public sealed class ReservationRequestRepositoryTests(PostgreSqlFixture fixture)
         Assert.Equal("user-42", stored.UserId);
     }
 
-    private async Task<(Guid EventId, Guid SeatId)> SeedEventWithSeatAsync()
-    {
-        var seat = new Seat { Id = Guid.NewGuid(), Number = "A1" };
-        var seatEvent = new Event
-        {
-            Id = Guid.NewGuid(),
-            Name = "Test event",
-            StartsAt = DateTimeOffset.UtcNow.AddDays(30),
-            Seats = { seat }
-        };
-        await using var context = fixture.CreateDbContext();
-        context.Events.Add(seatEvent);
-        await context.SaveChangesAsync();
-        return (seatEvent.Id, seat.Id);
-    }
+    private Task<(Guid EventId, Guid SeatId)> SeedEventWithSeatAsync()
+        => ReservationSeed.SeedEventWithSeatAsync(fixture);
 }

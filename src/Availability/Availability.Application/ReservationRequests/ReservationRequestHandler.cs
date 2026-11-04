@@ -53,7 +53,25 @@ public class ReservationRequestHandler
             RequestedAt = reservationRequest.RequestedAt.UtcDateTime
         };
 
-        await _messagePublisher.PublishAsync(message, cancellationToken);
+        try
+        {
+            await _messagePublisher.PublishAsync(message, cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            // Without the message Booking never learns about the request, and Availability would
+            // report it as "processing" forever, so the stored row is compensated (removed).
+            // CancellationToken.None: a cancelled caller must not leave the cleanup half done.
+            await _repository.RemoveAsync(reservationRequest, CancellationToken.None);
+
+            // A cancellation is not a broker failure: rethrow it untouched instead of wrapping it.
+            if (exception is OperationCanceledException)
+            {
+                throw;
+            }
+
+            throw new ReservationRequestPublishException(reservationRequest.Id, exception);
+        }
 
         return reservationRequest;
     }

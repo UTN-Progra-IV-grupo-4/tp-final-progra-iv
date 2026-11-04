@@ -15,6 +15,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <ProjectReference Include="..\..\..\src\Availability\Availability.Infrastructure\Availability.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\Availability\Availability.Web\Availability.Web.csproj" />
     <None Update="constraints.sql" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\..\src\Availability\Availability.Infrastructure\Persistence\Scripts\demo-data.sql"
           Link="demo-data.sql" CopyToOutputDirectory="PreserveNewest" />

@@ -10,10 +10,12 @@ namespace Availability.Web.Controllers;
 public class ReservationController : ControllerBase
 {
     private readonly ReservationRequestHandler _handler;
+    private readonly ILogger<ReservationController> _logger;
 
-    public ReservationController(ReservationRequestHandler handler)
+    public ReservationController(ReservationRequestHandler handler, ILogger<ReservationController> logger)
     {
         _handler = handler;
+        _logger = logger;
     }
 
     [Authorize]
@@ -43,9 +45,22 @@ public class ReservationController : ControllerBase
                 status = "Pending"
             });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new { message = exception.Message });
+        }
+        catch (ReservationRequestPublishException exception)
+        {
+            _logger.LogError(
+                exception.InnerException,
+                "Reservation request {RequestId} could not be published and was removed.",
+                exception.RequestId);
+
+            // The inner exception message is not exposed: it may describe broker internals.
+            return Problem(
+                title: "Reservation request could not be processed",
+                detail: "The reservation request could not be sent for processing. Please try again later.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
         }
     }
 }
