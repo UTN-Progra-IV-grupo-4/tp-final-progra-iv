@@ -37,6 +37,8 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
                 entry.State = EntityState.Detached;
             }
 
+            dbContext.Entry(reservation).State = EntityState.Detached;
+
             var existingReservation = await dbContext.Reservations
                 .AsNoTracking()
                 .SingleOrDefaultAsync(
@@ -87,20 +89,64 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
         return updated == 1;
     }
 
-    public async Task<bool> TryExpireAsync(
-        Guid reservationId,
-        DateTimeOffset utcNow,
+    public async Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
+        DateTimeOffset now,
+        int batchSize,
         CancellationToken cancellationToken = default)
     {
-        var updated = await dbContext.Reservations
-            .Where(reservation => reservation.Id == reservationId &&
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
+
+        return await dbContext.Reservations
+            .AsNoTracking()
+            .Where(reservation =>
                 reservation.Status == ReservationStatus.Retained &&
-                reservation.ExpiresAt <= utcNow)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(reservation => reservation.Status, ReservationStatus.Expired),
+                reservation.ExpiresAt <= now)
+            .OrderBy(reservation => reservation.ExpiresAt)
+            .ThenBy(reservation => reservation.Id)
+            .Take(batchSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<bool> TryExpireAsync(
+        Guid reservationId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        // Keep the state and expiry checks in the UPDATE to prevent stale reads from racing with other transitions.
+        var updatedCount = await dbContext.Reservations
+            .Where(reservation =>
+                reservation.Id == reservationId &&
+                reservation.Status == ReservationStatus.Retained &&
+                reservation.ExpiresAt <= now)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    reservation => reservation.Status,
+                    ReservationStatus.Expired),
                 cancellationToken);
 
-        return updated == 1;
+        return updatedCount > 0;
+    }
+
+    public async Task<bool> TryExpireRetainedReservationForSeatAsync(
+        Guid eventId,
+        Guid seatId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        // Recheck the seat, state, and expiry atomically before releasing the seat.
+        var updatedCount = await dbContext.Reservations
+            .Where(reservation =>
+                reservation.EventId == eventId &&
+                reservation.SeatId == seatId &&
+                reservation.Status == ReservationStatus.Retained &&
+                reservation.ExpiresAt <= now)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    reservation => reservation.Status,
+                    ReservationStatus.Expired),
+                cancellationToken);
+
+        return updatedCount > 0;
     }
 
     private static PostgresException? GetUniqueViolation(DbUpdateException exception) =>

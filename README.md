@@ -42,6 +42,7 @@ Message Broker ──────── │
 ## Services
 
 ### Availability
+- Issue #12: [modelo, configuración de PostgreSQL, migraciones y pendientes de integración](docs/availability-12.md).
 - Exposes seat availability queries (public, no auth required)
 - Accepts reservation requests and publishes them to the broker
 - Delegates reservation status queries to Booking
@@ -65,9 +66,12 @@ Booking separates its REST entry point (`Booking.Api`), business layer (`Booking
 - Notifies users when a reservation is created and confirmed after successful payment
 - **Out of implementation scope** (confirmed by the professor): it is only drawn in the architecture diagrams, so it needs no subscription on the broker
 
-### Authorization Server
-- Issues tokens for authenticated users
-- All inter-service communication is authenticated
+### Authorization Server (Keycloak)
+- Issues tokens for authenticated users via OpenID Connect (OIDC)
+- Supports Client Credentials flow for inter-service authentication
+- Manages users, roles, and OAuth clients
+- **Configuration:** Realm export in `infra/keycloak/realm-export.json`
+- **Documentation:** See [infra/keycloak/README.md](infra/keycloak/README.md)
 
 ## Technical Decisions
 
@@ -79,7 +83,7 @@ Agreed by the team and validated by the professor. Each decision has its own iss
 | Database | PostgreSQL with Entity Framework Core (Npgsql) | One PostgreSQL container with three logical databases, each with its own user ([#6](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/6)) |
 | Authorization server | Keycloak, running as a container | OIDC for users and client credentials between services ([#5](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)) |
 | Message broker | Azure Service Bus (one topic, one subscription for Booking), behind an interface | Availability publishes, Booking consumes; RabbitMQ exists as local fallback profile ([#4](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/4)) |
-| Running everything | Docker Compose, one command | Planned in [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3) |
+| Local infrastructure | Docker Compose | PostgreSQL and Keycloak from [#3](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/3); service containers are added as implemented |
 
 Secrets, such as the Service Bus connection string, live in a local `.env` file or in `dotnet user-secrets` and are **never committed**: the repository is public. Only `.env.example` with empty values is versioned.
 
@@ -134,7 +138,7 @@ docker compose down
 
 ## Getting started
 
-Requires the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
+Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
 
 ```
 TpFinal.sln
@@ -143,6 +147,10 @@ src/
   Booking/Booking.Api                  REST API
   Payment/Payment.Grpc                 gRPC API
   Contracts/                           .proto files and messages, the only shared project
+infra/
+  keycloak/                            Keycloak configuration and realm export
+docker/
+  postgres/                            PostgreSQL initialization scripts
 ```
 
 Services never reference each other: they only talk over HTTP, gRPC or the broker, and the only project they may share is `Contracts`.
@@ -198,6 +206,18 @@ Nobody pushes directly to `main` or `develop`: both are protected by a ruleset.
 - The description must include `Closes #<issue-number>` (the PR template already has it).
 - At least **1 approval** from another team member is required, so nobody merges their own PR.
 - Releases merge `develop` → `main`, and the cards are moved to **Prod** by hand.
+
+### Continuous integration
+
+`.github/workflows/ci.yml` builds `TpFinal.sln` and runs every test project in it on each PR into `develop` and on each push to `develop`. The integration tests start PostgreSQL with Testcontainers, so they need a running Docker daemon (Docker Desktop locally; the GitHub runner already has one).
+
+Run the same steps locally before opening a PR:
+
+```bash
+dotnet restore TpFinal.sln
+dotnet build TpFinal.sln --no-restore --configuration Release
+dotnet test TpFinal.sln --no-build --configuration Release
+```
 
 ### Commits
 

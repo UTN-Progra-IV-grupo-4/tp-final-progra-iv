@@ -15,6 +15,7 @@ public static class BookingBusinessServiceCollectionExtensions
         services.AddOptions<PaymentProcessingOptions>();
         services.AddScoped<IReservationRequestProcessor, ReservationRequestProcessor>();
         services.AddScoped<ReservationPaymentProcessor>();
+        services.AddScoped<IExpireRetainedReservations, ExpireRetainedReservations>();
         services.TryAddSingleton(TimeProvider.System);
 
         return services;

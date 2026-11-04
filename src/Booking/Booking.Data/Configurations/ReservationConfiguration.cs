@@ -28,6 +28,9 @@ public class ReservationConfiguration : IEntityTypeConfiguration<Reservation>
             .IsUnique()
             .HasFilter("\"status\" IN ('Retained', 'Confirmed')");
 
+        builder.HasIndex(reservation => new { reservation.ExpiresAt, reservation.Id })
+            .HasFilter("\"status\" = 'Retained'");
+
         builder.Property(reservation => reservation.Status)
             .HasColumnName("status")
             .HasConversion<string>()

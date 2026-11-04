@@ -1,7 +1,9 @@
 using Booking.Api.Messaging;
+using Booking.Api.Reservations;
 using Booking.Business;
 using Booking.Business.Payments;
 using Booking.Business.Reservations;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,8 +17,20 @@ if (string.IsNullOrWhiteSpace(bookingConnectionString))
 }
 
 builder.Services.AddBookingBusiness(bookingConnectionString);
-builder.Services.Configure<ReservationProcessingOptions>(
-    builder.Configuration.GetSection("ReservationProcessing"));
+builder.Services
+    .AddOptions<ReservationProcessingOptions>()
+    .Bind(builder.Configuration.GetSection(ReservationProcessingOptions.SectionName))
+    .Validate(
+        options => options.RetentionDuration > TimeSpan.Zero,
+        $"{nameof(ReservationProcessingOptions.RetentionDuration)} must be greater than zero.")
+    .Validate(
+        options => options.ExpirationCheckInterval > TimeSpan.Zero,
+        $"{nameof(ReservationProcessingOptions.ExpirationCheckInterval)} must be greater than zero.")
+    .Validate(
+        options => options.ExpirationBatchSize > 0,
+        $"{nameof(ReservationProcessingOptions.ExpirationBatchSize)} must be greater than zero.")
+    .ValidateOnStart();
+builder.Services.AddHostedService<ExpiredReservationsBackgroundService>();
 builder.Services.Configure<PaymentProcessingOptions>(
     builder.Configuration.GetSection("Payment"));
 builder.Services.AddBookingMessaging(builder.Configuration);
