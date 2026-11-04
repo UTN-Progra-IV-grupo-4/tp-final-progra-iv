@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Payment.Business.Gateways;
 using Payment.Data;
 
@@ -14,6 +15,10 @@ public static class BusinessServiceCollectionExtensions
         // Solo el registro: el vínculo con la sección SimulatedGateway y la validación al arrancar
         // los hace Program.cs, así Business no depende de IConfiguration.
         services.AddOptions<SimulatedGatewayOptions>();
+        services.AddOptions<ChargeOptions>();
+
+        // TryAdd: un test puede registrar antes un reloj falso para probar el vencimiento sin esperar.
+        services.TryAddSingleton(TimeProvider.System);
 
         // Singleton: no guarda estado entre cobros y en modo Slow sigue trabajando aunque termine
         // la llamada gRPC que lo pidió, así que su vida no puede depender del scope del pedido.

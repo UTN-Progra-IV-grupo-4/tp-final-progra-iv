@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using Payment.Business;
 using Payment.Business.Gateways;
 using Payment.Grpc.Services;
@@ -19,6 +20,15 @@ builder.Services.AddPaymentBusiness(paymentConnectionString);
 builder.Services.AddOptions<SimulatedGatewayOptions>()
     .BindConfiguration(SimulatedGatewayOptions.SectionName)
     .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// El vencimiento tiene que superar la demora de la pasarela: si no, se reclamaría un cobro en curso.
+builder.Services.AddOptions<ChargeOptions>()
+    .BindConfiguration(ChargeOptions.SectionName)
+    .ValidateDataAnnotations()
+    .Validate<IOptions<SimulatedGatewayOptions>>(
+        (charge, gatewayOptions) => charge.PendingTimeoutSeconds > gatewayOptions.Value.SlowDelaySeconds,
+        "Charge:PendingTimeoutSeconds tiene que ser mayor que SimulatedGateway:SlowDelaySeconds.")
     .ValidateOnStart();
 
 builder.Services.AddGrpc();

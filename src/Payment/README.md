@@ -154,6 +154,7 @@ Usá un `reservation_id` nuevo por caso, salvo cuando el caso es justamente rein
 | 9 | `Approve` | El id del caso 8 | `APPROVED` con el mismo `chargeId`: el `Failed` se reclama y se cobra |
 | 10 | — | Payment detenido | Conexión rechazada. Un cliente gRPC de .NET lo recibe como `Unavailable` |
 | 11 | cualquiera | El id del caso 1 con `amount_cents: 999` o `currency: "USD"` | `InvalidArgument` "El pedido no coincide con el cobro registrado". No se cobra, y el log de Payment muestra los dos montos |
+| 12 | `Slow` y después `Approve` | Detené Payment a mitad de un cobro `Slow`, arrancalo en `Approve` y repetí el pedido | Antes de 60 s: `Aborted` (la fila sigue `Pending`). Después de 60 s: `APPROVED` con el mismo `chargeId`, y el log muestra "Cobro Pending abandonado" |
 
 ### Caso `Slow`: el reintento de Booking
 

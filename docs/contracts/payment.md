@@ -51,7 +51,7 @@ Un rechazo de negocio viaja en la respuesta. Un error técnico viaja como códig
 
 | Estado | Significado | Qué responde Payment a un nuevo pedido con la misma reserva |
 |---|---|---|
-| `Pending` | El cobro está reclamado y la pasarela todavía no respondió | `ABORTED` |
+| `Pending` | El cobro está reclamado y la pasarela todavía no respondió | `ABORTED`. Si el reclamo tiene más de `Charge:PendingTimeoutSeconds` (60 s), se considera abandonado y se reclama de nuevo, como un `Failed` |
 | `Approved` | La pasarela aprobó el cobro | Resultado guardado, sin cobrar de nuevo |
 | `Declined` | La pasarela rechazó el cobro (fondos, tarjeta) | Resultado guardado, sin cobrar de nuevo |
 | `Failed` | Error técnico. En la simulación no hubo cargo | Reclama el cobro con un `UPDATE` condicional y lo intenta de nuevo. Si otro pedido lo reclamó primero, responde `ABORTED`. |
@@ -62,9 +62,18 @@ Transiciones:
 (sin cobro) → Pending → Approved
                      → Declined
                      → Failed → Pending   (reintento)
+                     → Pending            (reclamo de un Pending vencido)
 ```
 
 Un cobro `Approved` o `Declined` nunca vuelve a cobrarse. Un cobro `Failed` puede reintentarse, pero solo si nadie lo tiene reclamado.
+
+### Cobro `Pending` abandonado
+
+Si Payment se cae a mitad de un cobro, la fila queda `Pending` y nadie la termina. Cada reclamo registra `claimed_at`; cuando pasan más de `Charge:PendingTimeoutSeconds` (60 s por defecto), el siguiente pedido con la misma reserva lo reclama con el mismo `UPDATE` condicional que se usa para `Failed` y vuelve a cobrar. Payment no arranca si el umbral no supera `SimulatedGateway:SlowDelaySeconds`.
+
+`claimed_at` es además un token de concurrencia: si un cobro lento termina después de que otro pedido lo reclamó, su resultado se descarta (log `Resultado descartado`) y no pisa el del pedido vigente.
+
+> **Riesgo con una pasarela real.** Un `Pending` vencido puede ser un cargo que la pasarela hizo y cuya respuesta se perdió. Reclamarlo cobraría dos veces. Con la pasarela simulada no hay cargo real; con una real habría que consultar a la pasarela antes de reclamar. Cada reclamo de un `Pending` vencido deja un log `warn` ("Cobro Pending abandonado") con el `claimed_at` original para el cotejo.
 
 ## 5. Reglas de idempotencia
 
@@ -193,3 +202,4 @@ sequenceDiagram
 |---|---|
 | 2026-11-02 | Versión inicial. Modo `Expire` fuera de alcance. Entidad `Charge`, tabla `charges`. |
 | 2026-11-04 | El error técnico de la pasarela y la base caída responden `UNAVAILABLE` (antes `INTERNAL`). Se documentan `INTERNAL`, `UNKNOWN` y lo que queda fuera de alcance. El documento pasa a `docs/contracts/`. |
+| 2026-11-04 | Un cobro `Pending` abandonado se reclama después de `Charge:PendingTimeoutSeconds`. Columna `claimed_at` como token de concurrencia. |

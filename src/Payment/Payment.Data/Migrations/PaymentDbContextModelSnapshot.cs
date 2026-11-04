@@ -33,6 +33,11 @@ namespace Payment.Data.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("amount_cents");
 
+                    b.Property<DateTime>("ClaimedAt")
+                        .IsConcurrencyToken()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("claimed_at");
+
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");

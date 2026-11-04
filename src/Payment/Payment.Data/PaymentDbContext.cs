@@ -24,6 +24,10 @@ public class PaymentDbContext(DbContextOptions<PaymentDbContext> options) : DbCo
             charge.Property(c => c.CreatedAt).HasColumnName("created_at");
             charge.Property(c => c.CompletedAt).HasColumnName("completed_at");
 
+            // Token de concurrencia: EF agrega "AND claimed_at = <valor>" al UPDATE. Si otro pedido
+            // reclamó el cobro vencido, el proceso anterior no pisa su resultado al terminar tarde.
+            charge.Property(c => c.ClaimedAt).HasColumnName("claimed_at").IsConcurrencyToken();
+
             // Garantía real de idempotencia: aunque dos réplicas reciban el mismo reintento a la vez,
             // la base acepta un solo cobro por reserva. La consulta previa en Business no alcanza sola.
             charge.HasIndex(c => c.ReservationId).IsUnique();

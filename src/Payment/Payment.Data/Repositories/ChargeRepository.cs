@@ -28,15 +28,19 @@ public class ChargeRepository(PaymentDbContext db) : IChargeRepository
         }
     }
 
-    public async Task<bool> TryReclaimFailedAsync(Guid chargeId, CancellationToken cancellationToken = default)
+    public async Task<bool> TryReclaimAsync(
+        Guid chargeId, DateTime staleBefore, DateTime claimedAt, CancellationToken cancellationToken = default)
     {
         // UPDATE condicional en un solo paso: la base evalúa el WHERE con la fila bloqueada, así que
-        // entre dos reintentos simultáneos solo uno ve Failed. Leer y después guardar dejaría a ambos cobrar.
-        // Va directo a la base sin pasar por el change tracker: la entidad en memoria sigue diciendo Failed.
+        // entre dos reintentos simultáneos solo uno lo ve reclamable. Leer y después guardar dejaría a ambos cobrar.
+        // Va directo a la base sin pasar por el change tracker: la entidad en memoria no se entera.
         var affected = await db.Charges
-            .Where(c => c.Id == chargeId && c.Status == ChargeStatus.Failed)
+            .Where(c => c.Id == chargeId &&
+                (c.Status == ChargeStatus.Failed ||
+                 (c.Status == ChargeStatus.Pending && c.ClaimedAt < staleBefore)))
             .ExecuteUpdateAsync(s => s
                 .SetProperty(c => c.Status, ChargeStatus.Pending)
+                .SetProperty(c => c.ClaimedAt, claimedAt)
                 .SetProperty(c => c.FailureReason, (string?)null)
                 .SetProperty(c => c.CompletedAt, (DateTime?)null),
                 cancellationToken);
@@ -44,9 +48,25 @@ public class ChargeRepository(PaymentDbContext db) : IChargeRepository
         return affected == 1;
     }
 
-    public async Task UpdateAsync(Charge charge, CancellationToken cancellationToken = default)
+    public async Task<bool> TryUpdateAsync(Charge charge, CancellationToken cancellationToken = default)
     {
         db.Charges.Update(charge);
-        await db.SaveChangesAsync(cancellationToken);
+
+        // El token se compara contra el valor original. La entidad puede venir del tracker con el
+        // ClaimedAt anterior al reclamo (que se hizo con ExecuteUpdate), así que se fija a mano:
+        // "guardar solo si claimed_at sigue siendo el que escribió este pedido".
+        db.Entry(charge).Property(c => c.ClaimedAt).OriginalValue = charge.ClaimedAt;
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+            return true;
+        }
+        // Se traduce a bool por lo mismo que en TryAddAsync: Business no depende de las excepciones de EF.
+        catch (DbUpdateConcurrencyException)
+        {
+            db.Entry(charge).State = EntityState.Detached;
+            return false;
+        }
     }
 }

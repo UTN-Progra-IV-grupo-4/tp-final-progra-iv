@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Payment.Business.Gateways;
 using Payment.Data.Entities;
 using Payment.Data.Repositories;
@@ -6,10 +7,13 @@ using Payment.Data.Repositories;
 namespace Payment.Business;
 
 // Caso de uso: cobrar una reserva retenida. Es idempotente por ReservationId: un reintento devuelve
-// el cobro guardado y solo vuelve a cobrar si el intento anterior falló técnicamente.
+// el cobro guardado y solo vuelve a cobrar si el intento anterior falló técnicamente o quedó abandonado.
+// TimeProvider y no DateTime.UtcNow: los tests pueden adelantar el reloj para probar el vencimiento.
 public class ChargeService(
     IChargeRepository charges,
     IPaymentGateway gateway,
+    IOptions<ChargeOptions> options,
+    TimeProvider timeProvider,
     ILogger<ChargeService> logger)
 {
     public async Task<ChargeResult> ChargeAsync(
@@ -28,6 +32,7 @@ public class ChargeService(
 
         // 2. Reclamo: guardamos el cobro como Pending antes de llamar a la pasarela.
         //    El índice único sobre ReservationId decide quién gana si dos pedidos llegan juntos.
+        var now = UtcNow();
         var charge = new Charge
         {
             Id = Guid.NewGuid(),
@@ -35,7 +40,8 @@ public class ChargeService(
             AmountCents = amountCents,
             Currency = currency,
             Status = ChargeStatus.Pending,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now,
+            ClaimedAt = now
         };
 
         if (!await charges.TryAddAsync(charge, cancellationToken))
@@ -77,17 +83,23 @@ public class ChargeService(
 
             case ChargeStatus.Failed:
                 // La falla anterior fue técnica: reclamamos el cobro para intentarlo de nuevo.
-                // Si otro pedido lo reclamó primero, no cobramos.
-                if (!await charges.TryReclaimFailedAsync(existing.Id, cancellationToken))
-                    throw new ChargeInProgressException(existing.ReservationId);
-
-                existing.Status = ChargeStatus.Pending;
-                logger.LogInformation(
-                    "Reintento de un cobro fallido. ReservationId={ReservationId} ChargeId={ChargeId}",
-                    existing.ReservationId, existing.Id);
-                return await ExecuteChargeAsync(existing, cancellationToken);
+                return await ReclaimAndChargeAsync(existing, cancellationToken);
 
             case ChargeStatus.Pending:
+                // Reclamado hace más que PendingTimeout: el proceso que lo tenía se cayó y nadie va a
+                // terminarlo. Se chequea acá, con el mismo "<" que el UPDATE, para no ir a la base en el
+                // caso común (un cobro en curso); el UPDATE condicional sigue decidiendo si dos compiten.
+                if (existing.ClaimedAt < UtcNow() - options.Value.PendingTimeout)
+                {
+                    // Warning: con una pasarela real, el proceso caído pudo haber cobrado sin registrarlo.
+                    // Se loguea el ClaimedAt original porque el reclamo lo sobrescribe.
+                    logger.LogWarning(
+                        "Cobro Pending abandonado, se reclama. ReservationId={ReservationId} ChargeId={ChargeId} " +
+                        "ReclamadoEn={ClaimedAt:O}",
+                        existing.ReservationId, existing.Id, existing.ClaimedAt);
+                    return await ReclaimAndChargeAsync(existing, cancellationToken);
+                }
+
                 // Otro pedido está cobrando en este momento: todavía no hay resultado que devolver.
                 throw new ChargeInProgressException(existing.ReservationId);
 
@@ -95,6 +107,29 @@ public class ChargeService(
                 // Bug, no un cobro en curso: la capa gRPC lo responde INTERNAL para que no se reintente.
                 throw new InvalidOperationException($"Estado de cobro inesperado: {existing.Status}.");
         }
+    }
+
+    // Toma el turno sobre un cobro existente (Failed, o Pending vencido) y lo cobra. Si otro pedido
+    // lo reclamó primero, no cobramos: ese pedido es el que está cobrando ahora.
+    private async Task<ChargeResult> ReclaimAndChargeAsync(Charge existing, CancellationToken cancellationToken)
+    {
+        var previousStatus = existing.Status;
+        var now = UtcNow();
+        var staleBefore = now - options.Value.PendingTimeout;
+
+        if (!await charges.TryReclaimAsync(existing.Id, staleBefore, now, cancellationToken))
+            throw new ChargeInProgressException(existing.ReservationId);
+
+        // El reclamo se hizo directo en la base: la entidad en memoria se alinea con lo que quedó guardado.
+        existing.Status = ChargeStatus.Pending;
+        existing.ClaimedAt = now;
+        existing.FailureReason = null;
+        existing.CompletedAt = null;
+
+        logger.LogInformation(
+            "Cobro reclamado para reintentar. EstadoAnterior={PreviousStatus} ReservationId={ReservationId} ChargeId={ChargeId}",
+            previousStatus, existing.ReservationId, existing.Id);
+        return await ExecuteChargeAsync(existing, cancellationToken);
     }
 
     // Precondición: el cobro ya está reclamado en estado Pending por este pedido.
@@ -110,8 +145,9 @@ public class ChargeService(
             // Falla técnica: dejamos el registro como Failed para auditoría y para un futuro reintento.
             // CancellationToken.None: el registro tiene que guardarse aunque Booking ya haya cortado.
             charge.Status = ChargeStatus.Failed;
-            charge.CompletedAt = DateTime.UtcNow;
-            await charges.UpdateAsync(charge, CancellationToken.None);
+            charge.CompletedAt = UtcNow();
+            if (!await charges.TryUpdateAsync(charge, CancellationToken.None))
+                LogLostClaim(charge);
 
             logger.LogWarning(ex, "Falla técnica al cobrar. ReservationId={ReservationId} ChargeId={ChargeId}",
                 charge.ReservationId, charge.Id);
@@ -121,8 +157,13 @@ public class ChargeService(
         // La pasarela ya respondió: el resultado se guarda sin cancelación para no perderlo.
         charge.Status = gatewayResult.IsApproved ? ChargeStatus.Approved : ChargeStatus.Declined;
         charge.FailureReason = gatewayResult.DeclineReason;
-        charge.CompletedAt = DateTime.UtcNow;
-        await charges.UpdateAsync(charge, CancellationToken.None);
+        charge.CompletedAt = UtcNow();
+        if (!await charges.TryUpdateAsync(charge, CancellationToken.None))
+        {
+            // Este pedido tardó más que PendingTimeout y otro lo reclamó: el resultado vigente es el del otro.
+            LogLostClaim(charge);
+            throw new ChargeInProgressException(charge.ReservationId);
+        }
 
         // Fin de la cadena (punto f).
         logger.LogInformation(
@@ -130,6 +171,21 @@ public class ChargeService(
             charge.ReservationId, charge.Id, charge.Status);
 
         return ToResult(charge, isReplay: false);
+    }
+
+    // Warning y no Information: con una pasarela real, la respuesta descartada puede ser un cargo hecho.
+    private void LogLostClaim(Charge charge) =>
+        logger.LogWarning(
+            "Resultado descartado: otro pedido reclamó el cobro vencido. ReservationId={ReservationId} " +
+            "ChargeId={ChargeId} EstadoDescartado={Status}",
+            charge.ReservationId, charge.Id, charge.Status);
+
+    // PostgreSQL guarda microsegundos y .NET usa ticks de 100 ns: se trunca para que el ClaimedAt en
+    // memoria sea exactamente el guardado, porque el token de concurrencia lo compara por igualdad.
+    private DateTime UtcNow()
+    {
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        return now.AddTicks(-(now.Ticks % 10));
     }
 
     private static ChargeResult ToResult(Charge charge, bool isReplay) => new(
