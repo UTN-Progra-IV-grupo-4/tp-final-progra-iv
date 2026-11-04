@@ -11,7 +11,7 @@ namespace Availability.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString, string? brokerProvider = null)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString, string? brokerProvider = null, bool useFakeBookingClient = false)
     {
         services.AddDbContext<AvailabilityDbContext>(options =>
         {
@@ -41,8 +41,17 @@ public static class DependencyInjection
             return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
         });
 
-        // Temporary fake until the real HTTP client against Booking (#21) is integrated.
-        services.AddScoped<IBookingStatusClient, FakeBookingStatusClient>();
+        // The fake only runs in Development; elsewhere the status is reported as unavailable
+        // until the real HTTP client against Booking (#21) is integrated.
+        if (useFakeBookingClient)
+        {
+            services.AddScoped<IBookingStatusClient, FakeBookingStatusClient>();
+        }
+        else
+        {
+            services.AddScoped<IBookingStatusClient, UnavailableBookingStatusClient>();
+        }
+
         return services;
     }
 }

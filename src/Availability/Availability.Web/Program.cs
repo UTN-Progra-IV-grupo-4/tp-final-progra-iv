@@ -10,7 +10,8 @@ builder.Services.AddControllersWithViews();
 // Web conecta las capas al iniciar; los controladores utilizan Application.
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Availability"),
-    builder.Configuration["Broker:Provider"]);
+    builder.Configuration["Broker:Provider"],
+    useFakeBookingClient: builder.Environment.IsDevelopment());
 builder.Services.AddScoped<ReservationRequestHandler>();
 builder.Services.AddScoped<ReservationStatusHandler>();
 
