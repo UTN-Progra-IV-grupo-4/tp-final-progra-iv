@@ -1,5 +1,6 @@
 using Availability.Application.ReservationRequests;
 using Availability.Infrastructure;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +12,25 @@ builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Availability"),
     builder.Configuration["Broker:Provider"]);
 builder.Services.AddScoped<ReservationRequestHandler>();
+
+// Cookie scheme as the default so [Authorize] challenges instead of throwing a 500.
+// #14 (OIDC login) will plug the OpenID Connect challenge on top of this cookie scheme.
+builder.Services
+    .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        // The API must answer 401/403 instead of redirecting to a login page.
+        options.Events.OnRedirectToLogin = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+        options.Events.OnRedirectToAccessDenied = context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            return Task.CompletedTask;
+        };
+    });
 
 var app = builder.Build();
 
@@ -25,6 +45,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapStaticAssets();
