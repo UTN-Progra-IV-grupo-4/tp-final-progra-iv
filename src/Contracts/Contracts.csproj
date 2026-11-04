@@ -6,4 +6,18 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!-- Mismas versiones que trae Grpc.AspNetCore 2.64.0 en Payment, para no mezclar versiones en runtime. -->
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.27.0" />
+    <!-- Solo los tipos base de gRPC: Contracts es una librería y no debe arrastrar ASP.NET a quien la use. -->
+    <PackageReference Include="Grpc.Core.Api" Version="2.64.0" />
+    <!-- Herramienta de build (genera el C#), no dependencia de runtime: no se propaga a Booking ni a Payment. -->
+    <PackageReference Include="Grpc.Tools" Version="2.64.0" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Both: el mismo contrato genera la base del servidor (Payment) y el cliente (Booking). -->
+  <ItemGroup>
+    <Protobuf Include="Protos\**\*.proto" ProtoRoot="Protos" GrpcServices="Both" />
+  </ItemGroup>
+
 </Project>
