@@ -1,6 +1,6 @@
 # Contrato Booking → Payment
 
-> Estado: borrador para el PR de #22. Fuente de verdad del `.proto`: `src/Contracts/Protos/payment.proto`.
+> Estado: implementado en #22. Fuente de verdad del `.proto`: `src/Contracts/Protos/payment.proto`.
 > Este documento describe el contrato y las reglas de negocio. El detalle de implementación vive en el código de `Payment.Business`.
 
 ## 1. Propósito
@@ -128,7 +128,7 @@ sequenceDiagram
     participant P as Pasarela simulada
 
     B->>G: Charge(reservation_id, amount_cents, currency)
-    G->>G: Validar Guid, monto > 0 y moneda soportada
+    G->>G: Validar reservation_id (formato D), monto (1 a MaxAmountCents) y moneda soportada
 
     alt Datos inválidos
         G-->>B: INVALID_ARGUMENT
@@ -147,12 +147,12 @@ sequenceDiagram
                 S->>P: ChargeAsync(monto, moneda)
                 alt Respuesta de la pasarela
                     P-->>S: aprobado o rechazado
-                    S->>R: UpdateAsync (Approved o Declined)
+                    S->>R: TryUpdateAsync (Approved o Declined)
                     S-->>G: Resultado nuevo
                     G-->>B: ChargeResponse
                 else Falla técnica
                     P-->>S: excepción
-                    S->>R: UpdateAsync (Failed)
+                    S->>R: TryUpdateAsync (Failed)
                     S-->>G: Error técnico
                     G-->>B: UNAVAILABLE
                 end
@@ -160,18 +160,18 @@ sequenceDiagram
         else Cobro previo con otro monto o moneda
             S-->>G: Conflicto
             G-->>B: INVALID_ARGUMENT
-        else Pending
+        else Pending reciente
             S-->>G: En curso
             G-->>B: ABORTED
         else Approved o Declined
             S-->>G: Resultado guardado (IsReplay)
             G-->>B: ChargeResponse
-        else Failed
-            S->>R: TryReclaimFailedAsync
+        else Failed, o Pending vencido (más de PendingTimeoutSeconds)
+            S->>R: TryReclaimAsync
             alt Reclamo ganado
                 S->>P: ChargeAsync(monto, moneda)
                 P-->>S: aprobado, rechazado o excepción
-                S->>R: UpdateAsync (resultado o Failed)
+                S->>R: TryUpdateAsync (resultado o Failed)
                 S-->>G: Resultado o error
                 G-->>B: ChargeResponse o error gRPC
             else Otro pedido lo reclamó
@@ -187,6 +187,7 @@ sequenceDiagram
 | Tema | Estado | Detalle |
 |---|---|---|
 | Autenticación entre servicios | Pendiente en #11 | Payment hoy no valida tokens. #11 agrega client credentials con Keycloak; ahí aparecen `UNAUTHENTICATED` y `PERMISSION_DENIED`. |
+| Doble cobro con pasarela real | Limitación conocida | Con una pasarela real, reclamar un `Pending` vencido, o un `Pending` que dejó una actualización fallida tras la aprobación, puede cobrar dos veces. La mitigación sería consultar a la pasarela antes de reclamar. |
 | Modo `Expire` de la pasarela | Descartado | La expiración de la reserva es de Booking (#19 y #20). Se prueba con su reloj controlado, no con una demora de Payment. |
 | RPC de consulta y de reembolso | Descartado en esta etapa | El cotejo y el reembolso son manuales (sección 6). |
 
