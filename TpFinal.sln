@@ -22,6 +22,7 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Payment.Data", "src\Payment\Payment.Data\Payment.Data.csproj", "{DD736900-3804-477F-B0DB-98D3F2AFC6C9}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Payment.Business", "src\Payment\Payment.Business\Payment.Business.csproj", "{E44E65FE-4351-4F9C-8BE0-57D716261976}"
+EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Availability.Domain", "src\Availability\Availability.Domain\Availability.Domain.csproj", "{F4F6D006-0028-41DF-B914-AB172E16889D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Availability.Application", "src\Availability\Availability.Application\Availability.Application.csproj", "{4EE667FD-94B3-44CE-82C5-D0AC1741C761}"
@@ -41,6 +42,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Availability", "Availability", "{EECBE452-C6B7-AE81-5AA2-337B135F0632}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Availability.Tests", "tests\Availability\Availability.Tests\Availability.Tests.csproj", "{4355A238-2BB1-4B36-8166-946817BD0A3C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Payment", "Payment", "{B7EE82CF-805A-C1B2-5DB7-B308AD7340B4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Payment.Tests", "tests\Payment\Payment.Tests\Payment.Tests.csproj", "{669A64CD-F6D7-45F9-A981-838CB25C4BA7}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -208,6 +213,18 @@ Global
 		{4355A238-2BB1-4B36-8166-946817BD0A3C}.Release|x64.Build.0 = Release|Any CPU
 		{4355A238-2BB1-4B36-8166-946817BD0A3C}.Release|x86.ActiveCfg = Release|Any CPU
 		{4355A238-2BB1-4B36-8166-946817BD0A3C}.Release|x86.Build.0 = Release|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Debug|x64.Build.0 = Debug|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Debug|x86.Build.0 = Debug|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Release|x64.ActiveCfg = Release|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Release|x64.Build.0 = Release|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Release|x86.ActiveCfg = Release|Any CPU
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -231,5 +248,7 @@ Global
 		{0072AB82-61C8-46FF-BBA7-EF69398C7BE1} = {8C5E241B-B12A-B4A8-862B-834FA6327AF9}
 		{EECBE452-C6B7-AE81-5AA2-337B135F0632} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{4355A238-2BB1-4B36-8166-946817BD0A3C} = {EECBE452-C6B7-AE81-5AA2-337B135F0632}
+		{B7EE82CF-805A-C1B2-5DB7-B308AD7340B4} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{669A64CD-F6D7-45F9-A981-838CB25C4BA7} = {B7EE82CF-805A-C1B2-5DB7-B308AD7340B4}
 	EndGlobalSection
 EndGlobal
