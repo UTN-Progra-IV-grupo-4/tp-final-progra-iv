@@ -7,5 +7,6 @@
   <!-- Los casos de uso dependen del dominio; los detalles de infraestructura quedan fuera. -->
   <ItemGroup>
     <ProjectReference Include="..\Availability.Domain\Availability.Domain.csproj" />
+    <ProjectReference Include="..\..\Contracts\Contracts.csproj" />
   </ItemGroup>
 </Project>
