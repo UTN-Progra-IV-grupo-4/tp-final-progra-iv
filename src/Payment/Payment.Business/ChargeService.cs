@@ -91,12 +91,6 @@ public class ChargeService(
                 // caso común (un cobro en curso); el UPDATE condicional sigue decidiendo si dos compiten.
                 if (existing.ClaimedAt < UtcNow() - options.Value.PendingTimeout)
                 {
-                    // Warning: con una pasarela real, el proceso caído pudo haber cobrado sin registrarlo.
-                    // Se loguea el ClaimedAt original porque el reclamo lo sobrescribe.
-                    logger.LogWarning(
-                        "Cobro Pending abandonado, se reclama. ReservationId={ReservationId} ChargeId={ChargeId} " +
-                        "ReclamadoEn={ClaimedAt:O}",
-                        existing.ReservationId, existing.Id, existing.ClaimedAt);
                     return await ReclaimAndChargeAsync(existing, cancellationToken);
                 }
 
@@ -114,6 +108,7 @@ public class ChargeService(
     private async Task<ChargeResult> ReclaimAndChargeAsync(Charge existing, CancellationToken cancellationToken)
     {
         var previousStatus = existing.Status;
+        var previousClaimedAt = existing.ClaimedAt;
         var now = UtcNow();
         var staleBefore = now - options.Value.PendingTimeout;
 
@@ -125,6 +120,17 @@ public class ChargeService(
         existing.ClaimedAt = now;
         existing.FailureReason = null;
         existing.CompletedAt = null;
+
+        // Warning solo para un Pending vencido y recién cuando se ganó el reclamo: con una pasarela real, el
+        // proceso caído pudo haber cobrado sin registrarlo. Se loguea el ClaimedAt original porque el reclamo
+        // lo sobrescribe.
+        if (previousStatus == ChargeStatus.Pending)
+        {
+            logger.LogWarning(
+                "Cobro Pending abandonado, reclamado. ReservationId={ReservationId} ChargeId={ChargeId} " +
+                "ReclamadoEn={ClaimedAt:O}",
+                existing.ReservationId, existing.Id, previousClaimedAt);
+        }
 
         logger.LogInformation(
             "Cobro reclamado para reintentar. EstadoAnterior={PreviousStatus} ReservationId={ReservationId} ChargeId={ChargeId}",
