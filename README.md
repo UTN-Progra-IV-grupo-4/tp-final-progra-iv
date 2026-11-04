@@ -173,7 +173,6 @@ Apply migrations when the PostgreSQL database is accessible. The EF Core tools r
 ```bash
 dotnet ef database update --project src/Booking/Booking.Data --startup-project src/Booking/Booking.Api
 ```
->>>>>>> origin/develop
 
 ```bash
 dotnet build TpFinal.sln

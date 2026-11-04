@@ -76,7 +76,7 @@
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "+http://localhost:5212,+https://localhost:7057"
+        "post.logout.redirect.uris": "http://localhost:5212/signout-callback-oidc##https://localhost:7057/signout-callback-oidc"
       },
       "protocol": "openid-connect",
       "protocolMappers": [
@@ -199,14 +199,13 @@
     {
       "alias": "google",
       "providerId": "google",
-      "enabled": true,
+      "enabled": false,
       "updateProfileFirstLoginMode": "on",
       "trustEmail": true,
       "storeToken": false,
       "addReadTokenRoleOnCreate": false,
       "authenticateByDefault": false,
       "linkOnly": false,
-      "firstLoginFlowAlias": "auto-link",
       "config": {
         "useJwksUrl": "true",
         "jwksUrl": "https://www.googleapis.com/oauth2/v3/certs",
@@ -225,12 +224,9 @@
     "xRobotsTag": "none",
     "xFrameOptions": "SAMEORIGIN",
     "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
-    "xXSSProtection": "1; mode=block",
-    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+    "xXSSProtection": "1; mode=block"
   },
   "internationalizationEnabled": false,
-  "webThemes": "",
-  "adminThemes": "",
   "emailTheme": "",
   "smtpServer": {},
   "loginTheme": "keycloak",

@@ -21,7 +21,7 @@ Keycloak manages authentication and authorization for the seat reservation syste
 - `user1` / `User123!`
 - `user2` / `User123!`
 
-**Identity provider:** Google (disabled until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured)
+**Identity provider:** Google (disabled until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured in .env)
 
 ## Quick Start
 
@@ -59,14 +59,8 @@ Required in `.env`:
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=admin
 KEYCLOAK_PORT=8080
-KEYCLOAK_REALM=seat-reservation
-KEYCLOAK_ISSUER=http://localhost:8080/realms/seat-reservation
-KEYCLOAK_FRONTEND_CLIENT_ID=availability-web
-KEYCLOAK_AVAILABILITY_CLIENT_ID=availability-service
 KEYCLOAK_AVAILABILITY_CLIENT_SECRET=<generate-secure-secret>
-KEYCLOAK_BOOKING_CLIENT_ID=booking-service
 KEYCLOAK_BOOKING_CLIENT_SECRET=<generate-secure-secret>
-KEYCLOAK_PAYMENT_CLIENT_ID=payment-service
 KEYCLOAK_PAYMENT_CLIENT_SECRET=<generate-secure-secret>
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -76,12 +70,20 @@ GOOGLE_CLIENT_SECRET=
 - Generate secure secrets for `*_CLIENT_SECRET` (e.g., `openssl rand -base64 32`)
 - Never commit `.env` to the repository
 - Google IDP is optional; local users work without it
+- KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD are development defaults; change in production
 
 ## Troubleshooting
 
 ### Container fails to start
 
-If a secret variable is empty or undefined, Docker Compose will fail to start (using `${VAR:?}` syntax). Check that all `KEYCLOAK_*_CLIENT_SECRET` variables are set in `.env`.
+If a required variable is empty or undefined, Docker Compose will fail with a clear error message. Check that all `KEYCLOAK_*` variables are set in `.env`.
+
+### Realm import fails
+
+If Keycloak keeps restarting, check:
+1. Realm JSON syntax is valid (no trailing commas, valid JSON structure)
+2. No unsupported fields in `RealmRepresentation` (e.g., `webThemes`, `adminThemes` are not valid in Keycloak 26)
+3. View logs: `docker logs keycloak`
 
 ### Placeholders not resolved
 
@@ -92,7 +94,7 @@ If realm imports but secrets remain as literal `${...}` text:
 
 ### Token validation fails
 
-- Verify `KEYCLOAK_ISSUER` matches Keycloak URL
+- Verify Keycloak URL matches your configuration
 - Verify token is not expired
 - Verify audience matches the target service
 - Verify client secret matches between service and Keycloak
@@ -103,7 +105,7 @@ If realm imports but secrets remain as literal `${...}` text:
 - Reproducible: anyone gets the same config with `docker compose up`
 - No external dependencies: works offline, no Azure account needed
 - Free and open source
-- Validated by professor for this TP
+- Matches TP requirements (containerized authorization server)
 
 **Why Authorization Code + PKCE for users:**
 - PKCE prevents authorization code interception attacks
