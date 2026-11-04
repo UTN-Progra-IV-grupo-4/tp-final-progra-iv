@@ -24,7 +24,7 @@ public class ChargeService(
         // 1. ¿Ya existe un cobro para esta reserva?
         var existing = await charges.GetByReservationIdAsync(reservationId, cancellationToken);
         if (existing is not null)
-            return await ResolveExistingAsync(existing, cancellationToken);
+            return await ResolveExistingAsync(existing, amountCents, currency, cancellationToken);
 
         // 2. Reclamo: guardamos el cobro como Pending antes de llamar a la pasarela.
         //    El índice único sobre ReservationId decide quién gana si dos pedidos llegan juntos.
@@ -43,14 +43,29 @@ public class ChargeService(
             // Perdimos la carrera: otro pedido insertó primero. Lo tratamos como reintento.
             var winner = await charges.GetByReservationIdAsync(reservationId, cancellationToken)
                 ?? throw new InvalidOperationException($"Reclamo de cobro inconsistente para {reservationId}.");
-            return await ResolveExistingAsync(winner, cancellationToken);
+            return await ResolveExistingAsync(winner, amountCents, currency, cancellationToken);
         }
 
         return await ExecuteChargeAsync(charge, cancellationToken);
     }
 
-    private async Task<ChargeResult> ResolveExistingAsync(Charge existing, CancellationToken cancellationToken)
+    private async Task<ChargeResult> ResolveExistingAsync(
+        Charge existing,
+        long amountCents,
+        string currency,
+        CancellationToken cancellationToken)
     {
+        // Antes que el estado: devolver el cobro guardado haría creer a Booking que cobró otro importe,
+        // y reclamar un Failed cobraría uno distinto del registrado.
+        if (existing.AmountCents != amountCents || !string.Equals(existing.Currency, currency, StringComparison.Ordinal))
+        {
+            logger.LogWarning(
+                "Pedido distinto del cobro registrado. ReservationId={ReservationId} ChargeId={ChargeId} " +
+                "Registrado={StoredAmountCents} {StoredCurrency} Pedido={RequestedAmountCents} {RequestedCurrency}",
+                existing.ReservationId, existing.Id, existing.AmountCents, existing.Currency, amountCents, currency);
+            throw new ChargeMismatchException(existing.ReservationId);
+        }
+
         switch (existing.Status)
         {
             case ChargeStatus.Approved:

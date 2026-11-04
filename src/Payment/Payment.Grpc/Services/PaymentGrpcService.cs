@@ -73,7 +73,8 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
         ObjectDisposedException => StatusCode.Internal,
         // Cobro en curso (Pending): ABORTED y no UNAVAILABLE, porque Payment sí está accesible.
         InvalidOperationException => StatusCode.Aborted,
-        ArgumentException => StatusCode.InvalidArgument,
+        // Mismo reservation_id con otro monto o moneda: reintentar no lo arregla, requiere revisión.
+        ChargeMismatchException => StatusCode.InvalidArgument,
         // Modo simulado mal configurado: reintentar no lo arregla.
         NotSupportedException => StatusCode.Internal,
         _ => null
