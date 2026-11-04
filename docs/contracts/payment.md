@@ -19,9 +19,11 @@ service PaymentService {
 
 | Campo | Tipo | Regla |
 |---|---|---|
-| `reservation_id` | string (Guid) | Obligatorio. Es la clave de idempotencia: una reserva tiene como máximo un cobro. |
-| `amount_cents` | int64 | Mayor que 0. Monto fijo por asiento, en centavos enteros. Lo configura Booking en `Payment:AmountCents`. |
-| `currency` | string | Código ISO 4217 de 3 letras mayúsculas. Por ahora solo se acepta `ARS`. La lista la configura Payment en `SupportedCurrencies`. |
+| `reservation_id` | string (Guid) | Obligatorio, en formato `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` (el de `Guid.ToString()`; sin llaves). Es la clave de idempotencia: una reserva tiene como máximo un cobro. |
+| `amount_cents` | int64 | Entre 1 y `Charge:MaxAmountCents` (100.000.000, un millón de pesos). Monto fijo por asiento, en centavos enteros. Lo configura Booking en `Payment:AmountCents`. |
+| `currency` | string | Código ISO 4217 incluido en `Charge:SupportedCurrencies` de Payment, con mayúsculas exactas. Por ahora solo `ARS`. |
+
+Metadata opcional: `x-correlation-id`, el `correlationId` del mensaje original (#24). Payment lo agrega a sus logs si tiene hasta 64 caracteres entre letras, dígitos, `-`, `_`, `.` y `:`; si no, lo registra como `invalido`. Un valor inválido nunca rechaza el cobro.
 
 Respuesta `ChargeResponse`:
 
@@ -203,3 +205,4 @@ sequenceDiagram
 | 2026-11-02 | Versión inicial. Modo `Expire` fuera de alcance. Entidad `Charge`, tabla `charges`. |
 | 2026-11-04 | El error técnico de la pasarela y la base caída responden `UNAVAILABLE` (antes `INTERNAL`). Se documentan `INTERNAL`, `UNKNOWN` y lo que queda fuera de alcance. El documento pasa a `docs/contracts/`. |
 | 2026-11-04 | Un cobro `Pending` abandonado se reclama después de `Charge:PendingTimeoutSeconds`. Columna `claimed_at` como token de concurrencia. |
+| 2026-11-04 | Validaciones: monedas de `Charge:SupportedCurrencies`, tope `Charge:MaxAmountCents`, `reservation_id` solo en formato `D` y límites de `x-correlation-id`. |

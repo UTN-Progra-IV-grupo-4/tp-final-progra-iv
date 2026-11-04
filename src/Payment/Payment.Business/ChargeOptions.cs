@@ -14,4 +14,15 @@ public class ChargeOptions
     public int PendingTimeoutSeconds { get; set; } = 60;
 
     public TimeSpan PendingTimeout => TimeSpan.FromSeconds(PendingTimeoutSeconds);
+
+    // Monedas aceptadas (#22: solo ARS), en appsettings.json. Sin valor inicial a propósito: el binder
+    // de configuración agrega a la colección existente en vez de reemplazarla, así que un ["ARS"] acá
+    // más un ["USD"] configurado terminaría aceptando las dos. MinLength frena el arranque si falta.
+    [MinLength(1)]
+    public string[] SupportedCurrencies { get; set; } = [];
+
+    // Tope por cobro, en centavos: sin él se aprobaba long.MaxValue. Por defecto un millón de pesos,
+    // muy por encima del precio de un asiento; un monto mayor es un error de configuración de Booking.
+    [Range(typeof(long), "1", "9223372036854775807")]
+    public long MaxAmountCents { get; set; } = 100_000_000;
 }

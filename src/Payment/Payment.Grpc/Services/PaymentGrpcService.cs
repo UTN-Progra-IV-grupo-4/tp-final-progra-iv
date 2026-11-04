@@ -1,17 +1,25 @@
 using System.Data.Common;
 using Contracts.Payment;
 using Grpc.Core;
+using Microsoft.Extensions.Options;
 using Payment.Business;
 
 namespace Payment.Grpc.Services;
 
 // Presentación: traduce entre Protobuf y los tipos de Business y convierte las excepciones en códigos
 // gRPC, que es lo único que Booking interpreta. No contiene reglas de negocio.
-public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpcService> logger)
+public class PaymentGrpcService(
+    ChargeService chargeService,
+    IOptions<ChargeOptions> options,
+    ILogger<PaymentGrpcService> logger)
     : PaymentService.PaymentServiceBase
 {
     // Header que manda Booking (#24). gRPC exige claves de metadata en minúsculas.
     private const string CorrelationIdHeader = "x-correlation-id";
+
+    // Holgado para un GUID (36) o un id con prefijo; un valor más largo no es un id de correlación.
+    private const int MaxCorrelationIdLength = 64;
+    private const string InvalidCorrelationId = "invalido";
 
     public override async Task<ChargeResponse> Charge(ChargeRequest request, ServerCallContext context)
     {
@@ -21,7 +29,8 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
         // Plantilla y no diccionario: la consola la imprime legible y los proveedores estructurados
         // reciben igual CorrelationId como propiedad.
         using var _ = logger.BeginScope(
-            "CorrelationId:{CorrelationId}", context.RequestHeaders.GetValue(CorrelationIdHeader));
+            "CorrelationId:{CorrelationId}",
+            SanitizeCorrelationId(context.RequestHeaders.GetValue(CorrelationIdHeader)));
 
         try
         {
@@ -36,18 +45,39 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
     }
 
     // Un pedido mal formado no llega a Business: Booking lo recibe como INVALID_ARGUMENT y no reintenta.
-    private static Guid ValidateRequest(ChargeRequest request)
+    private Guid ValidateRequest(ChargeRequest request)
     {
-        if (!Guid.TryParse(request.ReservationId, out var reservationId) || reservationId == Guid.Empty)
-            throw InvalidArgument("reservation_id debe ser un GUID válido.");
+        // Solo el formato "D" (con guiones, sin llaves): es el que manda Booking con Guid.ToString(), y
+        // aceptar varios formatos para la misma clave de idempotencia solo agrega ambigüedad.
+        if (!Guid.TryParseExact(request.ReservationId, "D", out var reservationId) || reservationId == Guid.Empty)
+            throw InvalidArgument("reservation_id debe ser un GUID con formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.");
 
-        if (request.AmountCents <= 0)
-            throw InvalidArgument("amount_cents debe ser mayor que cero.");
+        var maxAmountCents = options.Value.MaxAmountCents;
+        if (request.AmountCents <= 0 || request.AmountCents > maxAmountCents)
+            throw InvalidArgument($"amount_cents debe estar entre 1 y {maxAmountCents}.");
 
-        if (request.Currency.Length != 3 || request.Currency.Any(c => c is < 'A' or > 'Z'))
-            throw InvalidArgument("currency debe ser un código ISO 4217 de tres letras mayúsculas.");
+        // Ordinal: "ars" no es "ARS". La lista sale de Charge:SupportedCurrencies; ampliarla no cambia el contrato.
+        var supportedCurrencies = options.Value.SupportedCurrencies;
+        if (!supportedCurrencies.Contains(request.Currency, StringComparer.Ordinal))
+            throw InvalidArgument($"currency no soportada. Monedas aceptadas: {string.Join(", ", supportedCurrencies)}.");
 
         return reservationId;
+    }
+
+    // El header viene de afuera y termina en cada log del cobro: un valor sin límite llenaría los logs
+    // (se probó con 20.000 caracteres). Kestrel ya rechaza los saltos de línea.
+    // Un valor inválido se reemplaza y no se corta: uno cortado parece válido pero ya no coincide con el
+    // de Booking, y en el cotejo confunde más que un marcador explícito. Nunca se rechaza el cobro por esto.
+    private static string? SanitizeCorrelationId(string? value)
+    {
+        // Sin header: Booking puede no mandarlo, y el log muestra CorrelationId:(null).
+        if (string.IsNullOrEmpty(value))
+            return null;
+
+        var isValid = value.Length <= MaxCorrelationIdLength &&
+            value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or ':');
+
+        return isValid ? value : InvalidCorrelationId;
     }
 
     private static RpcException InvalidArgument(string detail) =>

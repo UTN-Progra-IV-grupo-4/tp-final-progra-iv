@@ -147,14 +147,16 @@ Usá un `reservation_id` nuevo por caso, salvo cuando el caso es justamente rein
 | 2 | `Approve` | El mismo id del caso 1 | `APPROVED` con **el mismo** `chargeId`. No se cobra de nuevo |
 | 3 | cualquiera | `reservation_id: "no-es-guid"` | `InvalidArgument` |
 | 4 | cualquiera | `amount_cents: 0` | `InvalidArgument` |
-| 5 | cualquiera | `currency: "ars"` | `InvalidArgument` |
+| 5 | cualquiera | `currency: "ars"` o `"USD"` | `InvalidArgument` con la lista de monedas aceptadas |
 | 6 | `Decline` | Id nuevo, y después el mismo id otra vez | `DECLINED` "Fondos insuficientes", con el mismo `chargeId` en el reintento |
 | 7 | `Decline` | Un id aprobado en el caso 1 | Sigue `APPROVED`: el resultado guardado no depende del modo actual |
 | 8 | `Error` | Id nuevo | `Unavailable`. En la base, el cobro queda `Failed` |
 | 9 | `Approve` | El id del caso 8 | `APPROVED` con el mismo `chargeId`: el `Failed` se reclama y se cobra |
 | 10 | — | Payment detenido | Conexión rechazada. Un cliente gRPC de .NET lo recibe como `Unavailable` |
-| 11 | cualquiera | El id del caso 1 con `amount_cents: 999` o `currency: "USD"` | `InvalidArgument` "El pedido no coincide con el cobro registrado". No se cobra, y el log de Payment muestra los dos montos |
+| 11 | cualquiera | El id del caso 1 con `amount_cents: 999` | `InvalidArgument` "El pedido no coincide con el cobro registrado". No se cobra, y el log de Payment muestra los dos montos. (Con otra moneda el rechazo llega antes, como en el caso 5, mientras `ARS` sea la única aceptada) |
 | 12 | `Slow` y después `Approve` | Detené Payment a mitad de un cobro `Slow`, arrancalo en `Approve` y repetí el pedido | Antes de 60 s: `Aborted` (la fila sigue `Pending`). Después de 60 s: `APPROVED` con el mismo `chargeId`, y el log muestra "Cobro Pending abandonado" |
+| 13 | cualquiera | `amount_cents: 100000001`, o un `reservation_id` con llaves `{...}` | `InvalidArgument`. No se crea ninguna fila |
+| 14 | `Approve` | Id nuevo con un `x-correlation-id` de más de 64 caracteres | `APPROVED`. El log muestra `CorrelationId:invalido` |
 
 ### Caso `Slow`: el reintento de Booking
 
