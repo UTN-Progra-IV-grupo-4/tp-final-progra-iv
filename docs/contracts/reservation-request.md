@@ -5,11 +5,26 @@ Este contrato representa la solicitud de reserva de un asiento emitida por `Avai
 ## Campos
 
 - `MessageId`: GUID único de la solicitud. Debe usarse también como `ServiceBusMessage.MessageId` del broker para que Booking valide la coincidencia del cuerpo y del mensaje, y lo use como identificador idempotente de la reserva.
-- `CorrelationId`: identificador para rastreo distribuido.
+- `CorrelationId`: identificador para rastreo distribuido. Availability usa el mismo valor que el identificador de la solicitud (`MessageId` en texto). Decisión pendiente de confirmar con #24.
 - `EventId`: identificador único del evento.
 - `SeatId`: identificador único del asiento.
 - `UserId`: usuario que solicita la reserva.
 - `RequestedAt`: fecha y hora UTC en la que se emitió la solicitud.
+
+## Endpoint `POST /api/reservations`
+
+Requiere un usuario autenticado; el `UserId` del mensaje sale de su claim `sub`.
+
+| Código | Cuándo |
+| --- | --- |
+| 202 | Solicitud almacenada y publicada. Devuelve `requestId` y `status` ("Pending"). |
+| 400 | El asiento no existe o no pertenece al evento indicado. |
+| 401 | No hay credenciales válidas o el usuario no tiene identificador. |
+| 503 | No se pudo publicar en el broker. Se devuelve Problem Details sin detalles internos. |
+
+## Fallo de publicación
+
+Availability guarda la solicitud antes de publicar. Si la publicación falla, elimina la solicitud guardada y responde 503: Booking nunca recibió el mensaje y Availability interpreta el 404 de Booking como "en proceso", por lo que dejar la fila `Pending` haría esperar al usuario indefinidamente. El cliente puede reintentar con una nueva solicitud.
 
 ## Diagrama Mermaid
 

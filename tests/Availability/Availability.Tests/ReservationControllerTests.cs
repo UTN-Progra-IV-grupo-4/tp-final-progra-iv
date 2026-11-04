@@ -33,6 +33,56 @@ public sealed class ReservationControllerTests(PostgreSqlFixture fixture)
         Assert.DoesNotContain("secret broker detail", problem.Detail);
     }
 
+    [Fact]
+    public async Task CreateReservation_SeatOfAnotherEvent_Returns400()
+    {
+        await fixture.ResetAsync();
+        var (_, seatId) = await ReservationSeed.SeedEventWithSeatAsync(fixture);
+        var (otherEventId, _) = await ReservationSeed.SeedEventWithSeatAsync(fixture);
+        await using var context = fixture.CreateDbContext();
+        var controller = CreateController(context, new RecordingMessagePublisher(), "user-42");
+
+        var result = await controller.CreateReservation(
+            new ReservationRequestCommand { EventId = otherEventId, SeatId = seatId },
+            CancellationToken.None);
+
+        Assert.IsType<BadRequestObjectResult>(result);
+    }
+
+    [Fact]
+    public async Task CreateReservation_ValidRequest_Returns202WithTheRequestId()
+    {
+        await fixture.ResetAsync();
+        var (eventId, seatId) = await ReservationSeed.SeedEventWithSeatAsync(fixture);
+        var publisher = new RecordingMessagePublisher();
+        await using var context = fixture.CreateDbContext();
+        var controller = CreateController(context, publisher, "user-42");
+
+        var result = await controller.CreateReservation(
+            new ReservationRequestCommand { EventId = eventId, SeatId = seatId },
+            CancellationToken.None);
+
+        Assert.IsType<AcceptedResult>(result);
+        Assert.Single(publisher.PublishedMessages);
+    }
+
+    [Fact]
+    public async Task CreateReservation_PrincipalWithoutUserId_Returns401()
+    {
+        await fixture.ResetAsync();
+        var (eventId, seatId) = await ReservationSeed.SeedEventWithSeatAsync(fixture);
+        var publisher = new RecordingMessagePublisher();
+        await using var context = fixture.CreateDbContext();
+        var controller = CreateController(context, publisher, userId: null);
+
+        var result = await controller.CreateReservation(
+            new ReservationRequestCommand { EventId = eventId, SeatId = seatId },
+            CancellationToken.None);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+        Assert.Empty(publisher.PublishedMessages);
+    }
+
     private static ReservationController CreateController(
         AvailabilityDbContext context,
         IMessagePublisher publisher,
