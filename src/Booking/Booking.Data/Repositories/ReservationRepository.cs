@@ -41,13 +41,6 @@ public sealed class ReservationRepository(BookingDbContext dbContext)
             .ToListAsync(cancellationToken);
     }
 
-    public Task<Reservation?> GetByIdAsync(
-        Guid reservationId,
-        CancellationToken cancellationToken = default) =>
-        dbContext.Reservations.AsNoTracking().SingleOrDefaultAsync(
-            reservation => reservation.Id == reservationId,
-            cancellationToken);
-
     public async Task<ReservationInsertResult> TryInsertAsync(
         Reservation reservation,
         CancellationToken cancellationToken = default)
