@@ -1,6 +1,36 @@
+using Booking.Api.Messaging;
+using Booking.Api.Reservations;
+using Booking.Business;
+using Booking.Business.Reservations;
+using Microsoft.Extensions.Options;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+
+var bookingConnectionString = builder.Configuration.GetConnectionString("Booking");
+if (string.IsNullOrWhiteSpace(bookingConnectionString))
+{
+    throw new InvalidOperationException(
+        "Connection string 'Booking' is not configured. Set it with dotnet user-secrets or the ConnectionStrings__Booking environment variable.");
+}
+
+builder.Services.AddBookingBusiness(bookingConnectionString);
+builder.Services
+    .AddOptions<ReservationProcessingOptions>()
+    .Bind(builder.Configuration.GetSection(ReservationProcessingOptions.SectionName))
+    .Validate(
+        options => options.RetentionDuration > TimeSpan.Zero,
+        $"{nameof(ReservationProcessingOptions.RetentionDuration)} must be greater than zero.")
+    .Validate(
+        options => options.ExpirationCheckInterval > TimeSpan.Zero,
+        $"{nameof(ReservationProcessingOptions.ExpirationCheckInterval)} must be greater than zero.")
+    .Validate(
+        options => options.ExpirationBatchSize > 0,
+        $"{nameof(ReservationProcessingOptions.ExpirationBatchSize)} must be greater than zero.")
+    .ValidateOnStart();
+builder.Services.AddHostedService<ExpiredReservationsBackgroundService>();
+builder.Services.AddBookingMessaging(builder.Configuration);
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

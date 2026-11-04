@@ -1,0 +1,132 @@
+# Keycloak - Authorization Server
+
+Keycloak manages authentication and authorization for the seat reservation system using OpenID Connect (OIDC) and OAuth 2.0.
+
+## Configuration
+
+### Realm: `seat-reservation`
+
+**Clients:**
+
+| Client | Type | Flow | Purpose | Audience Mapper |
+|--------|------|-------|---------|-----------------|
+| `availability-web` | Public | Authorization Code + PKCE | User authentication in Availability.Web | N/A |
+| `availability-service` | Confidential | Client Credentials | Availability calls Booking | `booking-service` |
+| `booking-service` | Confidential | Client Credentials | Booking calls Payment | `payment-service` |
+| `payment-service` | Confidential | Token validation | Payment validates tokens | N/A |
+
+**Secrets** use placeholders `${VAR}` resolved from environment variables during realm import.
+
+**Test users** (development only, passwords in cleartext):
+- `user1` / `User123!`
+- `user2` / `User123!`
+
+**Identity provider:** Google, imported disabled (`enabled: false`). Once the OAuth credentials exist, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` and enable the provider by hand in the Keycloak admin console (*Identity providers → google*); setting the variables alone does not enable it.
+
+## Quick Start
+
+```bash
+# 1. Copy and fill .env
+cp .env.example .env
+# Edit .env to set KEYCLOAK_ADMIN, KEYCLOAK_ADMIN_PASSWORD, and all *_SECRET variables
+
+# 2. Start Keycloak
+docker compose up keycloak -d
+
+# 3. Access admin console
+# URL: http://localhost:8080/admin
+# Login with credentials from .env (KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD)
+```
+
+## Test Client Credentials
+
+```bash
+# Get token for booking-service
+curl -X POST http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials" \
+  -d "client_id=booking-service" \
+  -d "client_secret=<KEYCLOAK_BOOKING_CLIENT_SECRET from .env>"
+```
+
+The returned JWT should include `aud: ["payment-service"]` (added by the audience mapper). Decode at https://jwt.io to verify.
+
+## Environment Variables
+
+Required in `.env`:
+
+```bash
+KEYCLOAK_ADMIN=admin
+KEYCLOAK_ADMIN_PASSWORD=admin
+KEYCLOAK_PORT=8080
+KEYCLOAK_AVAILABILITY_CLIENT_SECRET=<generate-secure-secret>
+KEYCLOAK_BOOKING_CLIENT_SECRET=<generate-secure-secret>
+KEYCLOAK_PAYMENT_CLIENT_SECRET=<generate-secure-secret>
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+```
+
+**⚠️ Important:**
+- Generate secure secrets for `*_CLIENT_SECRET` (e.g., `openssl rand -base64 32`)
+- Never commit `.env` to the repository
+- Google IDP is optional; local users work without it
+- KEYCLOAK_ADMIN/KEYCLOAK_ADMIN_PASSWORD are development defaults; change in production
+
+## Troubleshooting
+
+### Container fails to start
+
+If a required variable is empty or undefined, Docker Compose will fail with a clear error message. Check that all `KEYCLOAK_*` variables are set in `.env`.
+
+### Realm import fails
+
+If Keycloak keeps restarting, check:
+1. Realm JSON syntax is valid (no trailing commas, valid JSON structure)
+2. No unsupported fields in `RealmRepresentation` (e.g., `webThemes`, `adminThemes` are not valid in Keycloak 26)
+3. View logs: `docker logs keycloak`
+
+### Placeholders not resolved
+
+If realm imports but secrets remain as literal `${...}` text:
+1. Verify environment variables are set in `.env`
+2. Verify docker-compose.yml passes them to the container
+3. Restart: `docker compose down && docker compose up keycloak -d`
+
+### Token validation fails
+
+- Verify Keycloak URL matches your configuration
+- Verify token is not expired
+- Verify audience matches the target service
+- Verify client secret matches between service and Keycloak
+
+## Architecture Decisions
+
+**Why Keycloak in Docker:**
+- Reproducible: anyone gets the same config with `docker compose up`
+- No external dependencies: works offline, no Azure account needed
+- Free and open source
+- Matches TP requirements (containerized authorization server)
+
+**Why Authorization Code + PKCE for users:**
+- PKCE prevents authorization code interception attacks
+- Standard for public clients in OAuth 2.1
+- Works well with modern web apps
+
+**Why Client Credentials for services:**
+- Services have their own identity, don't reuse user tokens
+- Secrets are confidential and can be rotated
+- Required by the TP specification
+
+## Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `http://localhost:8080/realms/seat-reservation/.well-known/openid-configuration` | OIDC discovery |
+| `http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token` | Token endpoint |
+| `http://localhost:8080/admin` | Admin console |
+
+## References
+
+- [Keycloak Documentation](https://www.keycloak.org/documentation)
+- [Issue #5 - Authorization server decision](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/5)
+- [Issue #10 - Configure authorization server](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/10)
