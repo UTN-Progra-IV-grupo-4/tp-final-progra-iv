@@ -1,4 +1,5 @@
 using Availability.Infrastructure;
+using Availability.Web.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,6 +7,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllersWithViews();
 // Web conecta las capas al iniciar; los futuros controladores utilizarán Application.
 builder.Services.AddInfrastructure(builder.Configuration.GetConnectionString("Availability"));
+var querySource = builder.Configuration["EventQueries:Source"] ?? "Database";
+if (querySource != "Demo" && querySource != "Database")
+{
+    throw new InvalidOperationException("EventQueries:Source debe ser Demo o Database.");
+}
+var useDemoData = querySource == "Demo";
+if (useDemoData && !builder.Environment.IsDevelopment())
+{
+    throw new InvalidOperationException("El modo Demo solo está permitido en Development.");
+}
+builder.Services.AddEventQueries(useDemoData);
+builder.Services.AddSingleton(new EventDisplayOptions(useDemoData));
 
 var app = builder.Build();
 

@@ -1,5 +1,6 @@
 using Availability.Domain.Entities;
 using Availability.Infrastructure.Persistence;
+using Availability.Infrastructure.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -52,8 +53,60 @@ public sealed class DatabaseIntegrationTests(PostgreSqlFixture fixture)
         await context.Database.ExecuteSqlRawAsync(sql);
 
         Assert.Equal(2, await context.Events.CountAsync());
-        Assert.Equal(6, await context.Seats.CountAsync());
+        Assert.Equal(40, await context.Seats.CountAsync());
         Assert.Empty(await context.ReservationRequests.ToListAsync());
+    }
+
+    [Fact]
+    public async Task SeedAndEfCatalog_MatchInMemoryCatalog_WithAllRowsAndStableIds()
+    {
+        await fixture.ResetAsync();
+        await using var context = fixture.CreateDbContext();
+        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "demo-data.sql"));
+        await context.Database.ExecuteSqlRawAsync(sql);
+        var catalog = new EfEventCatalog(context);
+        var summaries = await catalog.GetEventsAsync(default);
+        Assert.Equal(2, summaries.Count);
+        Assert.All(summaries, summary => Assert.Equal(20, summary.SeatCount));
+
+        foreach (var expected in DemoCatalogData.CreateEvents())
+        {
+            var actual = await catalog.GetEventAsync(expected.Id, default);
+            Assert.NotNull(actual);
+            Assert.Equal(expected.Name, actual.Name);
+            Assert.Equal(expected.StartsAt, actual.StartsAt);
+            Assert.Equal(expected.Seats.OrderBy(s => s.Id), actual.Seats.OrderBy(s => s.Id));
+            Assert.Equal(10, actual.Seats.Count(s => s.Number.StartsWith('A')));
+            Assert.Equal(10, actual.Seats.Count(s => s.Number.StartsWith('B')));
+        }
+        // El segundo evento conserva A1 con el ID 4, no lo reemplaza por uno nuevo.
+        var originalSeat = await context.Seats.SingleAsync(s => s.Id == Guid.Parse("20000000-0000-0000-0000-000000000004"));
+        Assert.Equal("A1", originalSeat.Number);
+        Assert.Equal(Guid.Parse("10000000-0000-0000-0000-000000000002"), originalSeat.EventId);
+    }
+
+    [Fact]
+    public async Task ExpandedSeed_PreservesAnExistingSeatAndItsRequest()
+    {
+        await fixture.ResetAsync();
+        await using var context = fixture.CreateDbContext();
+        var oldSeatId = Guid.Parse("20000000-0000-0000-0000-000000000004");
+        var request = new ReservationRequest
+        {
+            Id = Guid.NewGuid(), UserId = "usuario-existente", RequestedAt = DateTimeOffset.UtcNow,
+            Seat = new Seat
+            {
+                Id = oldSeatId, Number = "A1",
+                Event = new Event { Id = DemoCatalogData.EventId(2), Name = "Recital de ejemplo", StartsAt = DateTimeOffset.UtcNow }
+            }
+        };
+        context.ReservationRequests.Add(request);
+        await context.SaveChangesAsync();
+        var sql = await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "demo-data.sql"));
+        await context.Database.ExecuteSqlRawAsync(sql);
+        context.ChangeTracker.Clear();
+        Assert.Equal(40, await context.Seats.CountAsync());
+        Assert.Equal(oldSeatId, (await context.ReservationRequests.SingleAsync()).SeatId);
     }
 
     [Fact]

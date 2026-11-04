@@ -42,6 +42,7 @@ Message Broker ──────── │
 ## Services
 
 ### Availability
+- Issue #13: [eventos y mapa público de asientos, demo e integración pendiente](docs/availability-13.md).
 - Issue #12: [modelo, configuración de PostgreSQL, migraciones y pendientes de integración](docs/availability-12.md).
 - Exposes seat availability queries (public, no auth required)
 - Accepts reservation requests and publishes them to the broker
