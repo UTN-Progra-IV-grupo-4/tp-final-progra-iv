@@ -1,4 +1,5 @@
 using Availability.Application.Abstractions;
+using Availability.Infrastructure.Booking;
 using Availability.Infrastructure.Messaging;
 using Availability.Infrastructure.Persistence;
 using Availability.Infrastructure.Persistence.Repositories;
@@ -40,6 +41,8 @@ public static class DependencyInjection
             return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
         });
 
+        // Temporary fake until the real HTTP client against Booking (#21) is integrated.
+        services.AddScoped<IBookingStatusClient, FakeBookingStatusClient>();
         return services;
     }
 }
