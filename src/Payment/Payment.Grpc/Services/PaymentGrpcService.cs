@@ -38,7 +38,7 @@ public class PaymentGrpcService(
                 reservationId, request.AmountCents, request.Currency, context.CancellationToken);
             return ToResponse(result);
         }
-        catch (Exception ex) when (ToStatusCode(ex) is { } code)
+        catch (Exception exception) when (ToStatusCode(exception) is { } code)
         {
             throw new RpcException(new Status(code, Describe(code)));
         }
@@ -75,7 +75,7 @@ public class PaymentGrpcService(
             return null;
 
         var isValid = value.Length <= MaxCorrelationIdLength &&
-            value.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or ':');
+            value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.' or ':');
 
         return isValid ? value : InvalidCorrelationId;
     }
@@ -102,9 +102,10 @@ public class PaymentGrpcService(
         // Base caída (conexión rechazada, timeout): Booking reintenta y, si se agota, registra el posible
         // cobro tardío, que se coteja por reservation_id. Solo las transitorias: una contraseña mal
         // configurada o un error de SQL no se arreglan reintentando. DbException y no la de EF, para no
-        // atar la presentación al ORM; EF la envuelve al guardar, por eso se mira también InnerException.
-        DbException { IsTransient: true } or { InnerException: DbException { IsTransient: true } }
-            => StatusCode.Unavailable,
+        // atar la presentación al ORM. EF la envuelve al guardar (InvalidOperationException >
+        // DbUpdateException > NpgsqlException), por eso se recorre toda la cadena y este caso va antes
+        // que InvalidOperationException.
+        _ when HasTransientDatabaseFailure(exception) => StatusCode.Unavailable,
         // Cobro en curso (Pending): ABORTED y no UNAVAILABLE, porque Payment sí está accesible.
         ChargeInProgressException => StatusCode.Aborted,
         // Inconsistencia o bug (incluye ObjectDisposedException, que hereda de esta): reintentar
@@ -116,6 +117,19 @@ public class PaymentGrpcService(
         NotSupportedException => StatusCode.Internal,
         _ => null
     };
+
+    // Recorre la cadena completa de InnerException: la profundidad del envoltorio depende de EF y de
+    // la operación (guardar, consultar), así que no se asume un nivel fijo.
+    private static bool HasTransientDatabaseFailure(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DbException { IsTransient: true })
+                return true;
+        }
+
+        return false;
+    }
 
     // Textos genéricos: el repositorio es público y un error interno no debe filtrar detalles.
     private static string Describe(StatusCode code) => code switch
