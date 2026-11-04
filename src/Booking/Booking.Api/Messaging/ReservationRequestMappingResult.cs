@@ -12,6 +12,7 @@ internal static class ReservationRequestMappingErrorCodes
     public const string MessageIdInvalid = "MessageIdInvalid";
     public const string MessageIdMismatch = "MessageIdMismatch";
     public const string CorrelationIdRequired = "CorrelationIdRequired";
+    public const string CorrelationIdInvalid = "CorrelationIdInvalid";
 }
 
 internal sealed record ReservationRequestMappingResult(

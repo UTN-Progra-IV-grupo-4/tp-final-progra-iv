@@ -1,7 +1,6 @@
 using Booking.Api.Messaging;
 using Booking.Api.Reservations;
 using Booking.Business;
-using Booking.Business.Payments;
 using Booking.Business.Reservations;
 using Microsoft.Extensions.Options;
 
@@ -31,8 +30,6 @@ builder.Services
         $"{nameof(ReservationProcessingOptions.ExpirationBatchSize)} must be greater than zero.")
     .ValidateOnStart();
 builder.Services.AddHostedService<ExpiredReservationsBackgroundService>();
-builder.Services.Configure<PaymentProcessingOptions>(
-    builder.Configuration.GetSection("Payment"));
 builder.Services.AddBookingMessaging(builder.Configuration);
 
 builder.Services.AddControllers();

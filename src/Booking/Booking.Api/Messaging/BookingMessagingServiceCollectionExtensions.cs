@@ -1,3 +1,5 @@
+using Booking.Business.Payments;
+using Booking.Business.Reservations;
 using Microsoft.Extensions.Options;
 
 namespace Booking.Api.Messaging;
@@ -16,6 +18,17 @@ internal static class BookingMessagingServiceCollectionExtensions
                 "When Broker:AzureServiceBus:Enabled is true, Broker:Provider must be AzureServiceBus and the connection string, topic and subscription are required.")
             .ValidateOnStart();
 
+        var retentionDuration = configuration
+            .GetSection(ReservationProcessingOptions.SectionName)
+            .GetValue<TimeSpan>(nameof(ReservationProcessingOptions.RetentionDuration));
+
+        services
+            .AddOptions<PaymentProcessingOptions>()
+            .Bind(configuration.GetSection("Payment"))
+            .Validate(
+                options => options.IsValidFor(retentionDuration),
+                "When Payment:Enabled is true, amount, currency, attempts, deadline and retry delay must be valid, and the maximum call time must fit within half the retention duration.")
+            .ValidateOnStart();
         services.Configure<PaymentConsumerOptions>(configuration.GetSection("Payment"));
 
         services.AddSingleton<ReservationRequestMapper>();

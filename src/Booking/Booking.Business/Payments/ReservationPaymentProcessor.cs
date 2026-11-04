@@ -19,7 +19,8 @@ public sealed record ReservationPaymentResult(
     ReservationPaymentOutcome Outcome,
     Guid ReservationId,
     ReservationStatus? CurrentStatus = null,
-    string? ChargeId = null);
+    string? ChargeId = null,
+    bool PaymentOutcomeUnknown = false);
 
 public sealed class ReservationPaymentProcessor
 {
@@ -39,16 +40,6 @@ public sealed class ReservationPaymentProcessor
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(timeProvider);
 
-        if (options.Value.AmountCents <= 0 ||
-            options.Value.Currency is null ||
-            options.Value.Currency.Length != 3 ||
-            options.Value.Currency.Any(character => character is < 'A' or > 'Z') ||
-            options.Value.MaxAttempts < 1 ||
-            options.Value.RetryDelay < TimeSpan.Zero)
-        {
-            throw new InvalidOperationException("Payment processing options are invalid.");
-        }
-
         this.repository = repository;
         this.chargeClient = chargeClient;
         this.timeProvider = timeProvider;
@@ -65,12 +56,13 @@ public sealed class ReservationPaymentProcessor
             throw new ArgumentException("Reservation id is required.", nameof(reservationId));
         }
 
+        var outcomeUnknown = false;
         for (var attempt = 1; attempt <= options.MaxAttempts; attempt++)
         {
             var ineligible = await CheckEligibilityAsync(reservationId, cancellationToken);
             if (ineligible is not null)
             {
-                return ineligible;
+                return ineligible with { PaymentOutcomeUnknown = outcomeUnknown };
             }
 
             try
@@ -90,6 +82,8 @@ public sealed class ReservationPaymentProcessor
                 PaymentChargeFailure.DeadlineExceeded or
                 PaymentChargeFailure.Pending)
             {
+                outcomeUnknown |= exception.Failure is
+                    PaymentChargeFailure.Unavailable or PaymentChargeFailure.DeadlineExceeded;
                 if (attempt == options.MaxAttempts)
                 {
                     if (exception.Failure == PaymentChargeFailure.Pending)
@@ -100,15 +94,16 @@ public sealed class ReservationPaymentProcessor
                     var ineligibleAfterFailure = await CheckEligibilityAsync(reservationId, cancellationToken);
                     if (ineligibleAfterFailure is not null)
                     {
-                        return ineligibleAfterFailure;
+                        return ineligibleAfterFailure with { PaymentOutcomeUnknown = outcomeUnknown };
                     }
 
-                    return await PersistOutcomeAsync(
+                    var result = await PersistOutcomeAsync(
                         reservationId,
                         ReservationStatus.Rejected,
                         ReservationRejectionReason.PaymentUnavailable,
                         ReservationPaymentOutcome.PaymentUnavailable,
                         cancellationToken);
+                    return result with { PaymentOutcomeUnknown = true };
                 }
 
                 if (options.RetryDelay > TimeSpan.Zero)

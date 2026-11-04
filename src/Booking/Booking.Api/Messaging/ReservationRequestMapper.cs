@@ -68,6 +68,12 @@ internal sealed class ReservationRequestMapper
                 ReservationRequestMappingErrorCodes.CorrelationIdRequired);
         }
 
+        if (!IsSafeCorrelationId(message.CorrelationId))
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.CorrelationIdInvalid);
+        }
+
         return ReservationRequestMappingResult.Success(
             new ProcessReservationRequest(
                 message.MessageId,
@@ -75,4 +81,11 @@ internal sealed class ReservationRequestMapper
                 message.SeatId),
             message.CorrelationId);
     }
+
+    internal static bool IsSafeCorrelationId(string? value) =>
+        value is { Length: > 0 and <= 128 } &&
+        value.All(character => character is
+            (>= 'a' and <= 'z') or
+            (>= 'A' and <= 'Z') or
+            (>= '0' and <= '9') or '-' or '_' or '.');
 }
