@@ -11,6 +11,69 @@ namespace Booking.Tests.Data;
 public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixture)
 {
     [Fact]
+    public async Task GetOccupiedSeatIdsAsync_ReturnsOnlyOccupiedSeatsForRequestedEvent()
+    {
+        await fixture.ResetAsync();
+        var now = new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
+        var eventId = Guid.NewGuid();
+
+        var confirmed = CreateReservationForEvent(
+            eventId, ReservationStatus.Confirmed, now.AddMinutes(-5));
+        var retainedFuture = CreateReservationForEvent(
+            eventId, ReservationStatus.Retained, now.AddMilliseconds(1));
+        var retainedWithoutExpiry = CreateReservationForEvent(
+            eventId, ReservationStatus.Retained, null);
+        var retainedAtLimit = CreateReservationForEvent(
+            eventId, ReservationStatus.Retained, now);
+        var retainedOverdue = CreateReservationForEvent(
+            eventId, ReservationStatus.Retained, now.AddMilliseconds(-1));
+        var rejected = CreateReservationForEvent(
+            eventId, ReservationStatus.Rejected, null);
+        rejected.RejectionReason = ReservationRejectionReason.PaymentFailed;
+        var expired = CreateReservationForEvent(
+            eventId, ReservationStatus.Expired, now.AddMinutes(-5));
+        var confirmedInOtherEvent = CreateReservationForEvent(
+            Guid.NewGuid(), ReservationStatus.Confirmed, null);
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.AddRange(
+            confirmed, retainedFuture, retainedWithoutExpiry, retainedAtLimit,
+            retainedOverdue, rejected, expired, confirmedInOtherEvent);
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+        var actual = await repository.GetOccupiedSeatIdsAsync(eventId, now);
+
+        var expected = new[]
+        {
+            confirmed.SeatId,
+            retainedFuture.SeatId,
+            retainedWithoutExpiry.SeatId
+        };
+
+        // El contrato exige los IDs exactos, sin imponer un orden.
+        Assert.Equal(expected.Order(), actual.Order());
+    }
+
+    [Fact]
+    public async Task GetOccupiedSeatIdsAsync_WhenEventHasNoReservations_ReturnsEmptyList()
+    {
+        await fixture.ResetAsync();
+        var now = new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
+        var eventWithoutReservations = Guid.NewGuid();
+
+        await using var dbContext = fixture.CreateDbContext();
+        dbContext.Reservations.Add(CreateReservationForEvent(
+            Guid.NewGuid(), ReservationStatus.Confirmed, null));
+        await dbContext.SaveChangesAsync();
+
+        var repository = new ReservationRepository(dbContext);
+        var actual = await repository.GetOccupiedSeatIdsAsync(eventWithoutReservations, now);
+
+        Assert.Empty(actual);
+    }
+
+    [Fact]
     public async Task GetExpiredReservationsAsync_ReturnsOnlyRetainedReservationsExpiredAtOrBeforeNow()
     {
         await fixture.ResetAsync();
@@ -409,6 +472,17 @@ public sealed class ReservationRepositoryIntegrationTests(PostgreSqlFixture fixt
 
         Assert.Equal(ReservationInsertOutcome.Created, subsequentInsert.Outcome);
         Assert.Equal(EntityState.Detached, dbContext.Entry(conflictingReservation).State);
+    }
+
+    private static Reservation CreateReservationForEvent(
+        Guid eventId,
+        ReservationStatus status,
+        DateTimeOffset? expiresAt)
+    {
+        var reservation = CreateRetainedReservation(eventId: eventId);
+        reservation.Status = status;
+        reservation.ExpiresAt = expiresAt;
+        return reservation;
     }
 
     private static Reservation CreateRetainedReservation(

@@ -210,7 +210,7 @@ Nobody pushes directly to `main` or `develop`: both are protected by a ruleset.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` builds `TpFinal.sln` and runs every test project in it on each PR into `develop` and on each push to `develop`. The integration tests start PostgreSQL with Testcontainers, so they need a running Docker daemon (Docker Desktop locally; the GitHub runner already has one).
+`.github/workflows/ci.yml` builds `TpFinal.sln` and runs every test project in it on each PR into `develop` or `main` (release PRs) and on each push to either branch. The integration tests start PostgreSQL with Testcontainers, so they need a running Docker daemon (Docker Desktop locally; the GitHub runner already has one).
 
 Run the same steps locally before opening a PR:
 
