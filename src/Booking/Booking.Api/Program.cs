@@ -1,3 +1,4 @@
+using Booking.Api.Authentication;
 using Booking.Api.Messaging;
 using Booking.Api.Reservations;
 using Booking.Business;
@@ -31,12 +32,15 @@ builder.Services
     .ValidateOnStart();
 builder.Services.AddHostedService<ExpiredReservationsBackgroundService>();
 builder.Services.AddBookingMessaging(builder.Configuration);
+builder.Services.AddServiceAuthentication(builder.Configuration);
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+app.WarnWhenServiceAuthenticationIsNotConfigured();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -46,8 +50,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
 app.Run();
+
+// Exposes the entry point to WebApplicationFactory in tests.
+public partial class Program;
