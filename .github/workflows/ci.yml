@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# A new push to a PR supersedes the previous run; runs on develop and main always finish.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore TpFinal.sln
+
+      - name: Build
+        run: dotnet build TpFinal.sln --no-restore --configuration Release
+
+      # Runs every test project in the solution, including the Testcontainers
+      # suites, which start PostgreSQL through the Docker daemon on the runner.
+      - name: Test
+        run: dotnet test TpFinal.sln --no-build --configuration Release
