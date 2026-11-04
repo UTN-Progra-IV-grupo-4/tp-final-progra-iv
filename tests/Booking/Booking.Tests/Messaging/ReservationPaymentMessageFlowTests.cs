@@ -73,6 +73,21 @@ public sealed class ReservationPaymentMessageFlowTests
     }
 
     [Fact]
+    public async Task PaymentDisabled_CompletesRetainedReservationWithoutCallingPayment()
+    {
+        await using var harness = new Harness(paymentEnabled: false);
+        harness.Repository.EnqueueResult(ReservationInsertResult.Created());
+        harness.Payment.EnqueueResult(new PaymentChargeResult(PaymentChargeOutcome.Approved, "unused"));
+
+        var settlement = await harness.ProcessAsync();
+
+        Assert.Equal(1, settlement.Completed);
+        Assert.Empty(harness.Payment.Requests);
+        Assert.Equal(ReservationStatus.Retained,
+            (await harness.Repository.GetByIdAsync(harness.RequestId))!.Status);
+    }
+
+    [Fact]
     public async Task PaymentUnavailableAfterRetries_CompletesRejectedReservation()
     {
         await using var harness = new Harness();
@@ -99,6 +114,30 @@ public sealed class ReservationPaymentMessageFlowTests
             !message.Contains("transport-correlation", StringComparison.Ordinal));
         Assert.DoesNotContain(harness.Logs.Messages, message =>
             message.Contains("secret-user-payload", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UnknownPaymentOutcomeAfterExpiry_IsLoggedEvenWhenReservationExpires()
+    {
+        await using var harness = new Harness();
+        harness.Repository.EnqueueResult(ReservationInsertResult.Created());
+        harness.Payment.EnqueueFailure(PaymentChargeFailure.Unavailable);
+        harness.Payment.EnqueueStep((_, _) =>
+        {
+            harness.Clock.UtcNow = UtcNow.AddMinutes(10);
+            return Task.FromException<PaymentChargeResult>(
+                new PaymentChargeException(PaymentChargeFailure.DeadlineExceeded));
+        });
+
+        var settlement = await harness.ProcessAsync();
+
+        Assert.Equal(1, settlement.Completed);
+        Assert.Equal(ReservationStatus.Expired,
+            (await harness.Repository.GetByIdAsync(harness.RequestId))!.Status);
+        Assert.Contains(harness.Logs.Messages, message =>
+            message.Contains("ErrorCode: PaymentOutcomeUnknown", StringComparison.Ordinal) &&
+            message.Contains("ReservationStatus: Expired", StringComparison.Ordinal) &&
+            message.Contains("SettlementAction: Complete", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -263,7 +302,7 @@ public sealed class ReservationPaymentMessageFlowTests
         public AdjustableTimeProvider Clock { get; } = new(UtcNow);
         public RecordingLogger<ReservationRequestMessageProcessor> Logs { get; } = new();
 
-        public Harness()
+        public Harness(bool paymentEnabled = true)
         {
             var registrations = new ServiceCollection();
             registrations.AddSingleton<IReservationRepository>(Repository);
@@ -286,7 +325,7 @@ public sealed class ReservationPaymentMessageFlowTests
             var handler = new ReservationRequestMessageHandler(
                 services.GetRequiredService<IServiceScopeFactory>(),
                 new ReservationRequestMapper(),
-                Options.Create(new PaymentConsumerOptions { Enabled = true }));
+                Options.Create(new PaymentConsumerOptions { Enabled = paymentEnabled }));
             processor = new ReservationRequestMessageProcessor(
                 handler,
                 Logs);

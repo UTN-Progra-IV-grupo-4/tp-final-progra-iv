@@ -31,6 +31,7 @@ public sealed class ReservationRequestMessageHandlerTests
         Assert.Equal(ReservationProcessingOutcome.Retained, result.ProcessingResult.Outcome);
         Assert.Equal(requestId, result.ProcessingResult.RequestId);
         Assert.Equal("test-correlation-id", result.CorrelationId);
+        Assert.Null(result.PaymentResult);
         var request = Assert.Single(processor.Requests);
         Assert.Equal(requestId, request.RequestId);
         Assert.Equal(eventId, request.EventId);

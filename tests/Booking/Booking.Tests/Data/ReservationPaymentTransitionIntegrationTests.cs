@@ -114,6 +114,35 @@ public sealed class ReservationPaymentTransitionIntegrationTests(PostgreSqlFixtu
             stored.Status);
     }
 
+    [Fact]
+    public async Task TwoPaymentConsumersCompete_OnlyOneTerminalTransitionWins()
+    {
+        await fixture.ResetAsync();
+        var reservationId = await SeedAsync(UtcNow.AddMinutes(10));
+        var startGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        async Task<bool> TransitionAsync(
+            ReservationStatus status,
+            ReservationRejectionReason? reason)
+        {
+            await using var context = fixture.CreateDbContext();
+            await startGate.Task;
+            return await new ReservationRepository(context).TrySetPaymentOutcomeAsync(
+                reservationId, status, reason, UtcNow);
+        }
+
+        var confirmationTask = TransitionAsync(ReservationStatus.Confirmed, null);
+        var rejectionTask = TransitionAsync(
+            ReservationStatus.Rejected, ReservationRejectionReason.PaymentUnavailable);
+        startGate.SetResult();
+        var confirmed = await confirmationTask;
+        var rejected = await rejectionTask;
+
+        Assert.NotEqual(confirmed, rejected);
+        var stored = await ReadAsync(reservationId);
+        Assert.Equal(confirmed ? ReservationStatus.Confirmed : ReservationStatus.Rejected, stored.Status);
+    }
+
     private async Task<Guid> SeedAsync(DateTimeOffset expiresAt)
     {
         var reservation = new Reservation

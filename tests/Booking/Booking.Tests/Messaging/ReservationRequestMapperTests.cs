@@ -1,4 +1,5 @@
 using Booking.Api.Messaging;
+using System.Text.Json;
 
 namespace Booking.Tests.Messaging;
 
@@ -120,6 +121,33 @@ public sealed class ReservationRequestMapperTests
         Assert.Equal(ReservationRequestMappingErrorCodes.CorrelationIdRequired, result.ErrorCode);
     }
 
+    [Theory]
+    [InlineData("line\nbreak")]
+    [InlineData("non-ascii-é")]
+    [InlineData("with space")]
+    public void Map_WhenPayloadCorrelationIdHasUnsafeCharacters_ReturnsInvalidError(string correlationId)
+    {
+        var requestId = Guid.NewGuid();
+        var delivery = CreateDelivery(requestId, Guid.NewGuid(), Guid.NewGuid(),
+            requestId.ToString(), correlationId);
+
+        var result = mapper.Map(delivery);
+
+        Assert.False(result.IsValid);
+        Assert.Equal(ReservationRequestMappingErrorCodes.CorrelationIdInvalid, result.ErrorCode);
+    }
+
+    [Fact]
+    public void Map_WhenPayloadCorrelationIdExceedsLimit_ReturnsInvalidError()
+    {
+        var requestId = Guid.NewGuid();
+        var delivery = CreateDelivery(requestId, Guid.NewGuid(), Guid.NewGuid(),
+            requestId.ToString(), new string('a', 129));
+
+        Assert.Equal(ReservationRequestMappingErrorCodes.CorrelationIdInvalid,
+            mapper.Map(delivery).ErrorCode);
+    }
+
     private static ReservationRequestDelivery CreateDelivery(
         Guid requestId,
         Guid eventId,
@@ -127,17 +155,15 @@ public sealed class ReservationRequestMapperTests
         string? messageId,
         string correlationId = "test-correlation-id")
     {
-        var body = BinaryData.FromString(
-            $$"""
-              {
-                "messageId": "{{requestId}}",
-                "correlationId": "{{correlationId}}",
-                "eventId": "{{eventId}}",
-                "seatId": "{{seatId}}",
-                "userId": "test-user",
-                "requestedAt": "2026-11-01T12:00:00Z"
-              }
-              """);
+        var body = BinaryData.FromString(JsonSerializer.Serialize(new
+        {
+            messageId = requestId,
+            correlationId,
+            eventId,
+            seatId,
+            userId = "test-user",
+            requestedAt = "2026-11-01T12:00:00Z"
+        }));
 
         return new ReservationRequestDelivery(
             body,
