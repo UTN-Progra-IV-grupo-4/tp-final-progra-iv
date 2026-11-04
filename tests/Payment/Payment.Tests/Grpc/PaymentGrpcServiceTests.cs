@@ -117,7 +117,11 @@ public sealed class PaymentGrpcServiceTests(PostgreSqlFixture fixture) : IAsyncL
             reservationId.ToString("P"),
             string.Empty,
             Guid.Empty.ToString("D"),
-            "no-es-un-guid"
+            "no-es-un-guid",
+            // TryParseExact ignora los espacios de los extremos: el largo exacto los rechaza.
+            $" {reservationId:D}",
+            $"{reservationId:D} ",
+            $"\t{reservationId:D}\n"
         };
     }
 

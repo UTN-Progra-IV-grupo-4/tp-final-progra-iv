@@ -21,6 +21,9 @@ public class PaymentGrpcService(
     private const int MaxCorrelationIdLength = 64;
     private const string InvalidCorrelationId = "invalido";
 
+    // xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+    private const int GuidFormatDLength = 36;
+
     public override async Task<ChargeResponse> Charge(ChargeRequest request, ServerCallContext context)
     {
         var reservationId = ValidateRequest(request);
@@ -49,7 +52,11 @@ public class PaymentGrpcService(
     {
         // Solo el formato "D" (con guiones, sin llaves): es el que manda Booking con Guid.ToString(), y
         // aceptar varios formatos para la misma clave de idempotencia solo agrega ambigüedad.
-        if (!Guid.TryParseExact(request.ReservationId, "D", out var reservationId) || reservationId == Guid.Empty)
+        // El largo se chequea aparte: TryParseExact ignora espacios al inicio y al final, y " <guid> "
+        // llegaría como un id distinto del que Booking mandó.
+        if (request.ReservationId.Length != GuidFormatDLength ||
+            !Guid.TryParseExact(request.ReservationId, "D", out var reservationId) ||
+            reservationId == Guid.Empty)
             throw InvalidArgument("reservation_id debe ser un GUID con formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx.");
 
         var maxAmountCents = options.Value.MaxAmountCents;
