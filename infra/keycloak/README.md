@@ -21,7 +21,7 @@ Keycloak manages authentication and authorization for the seat reservation syste
 - `user1` / `User123!`
 - `user2` / `User123!`
 
-**Identity provider:** Google (disabled until `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are configured in .env)
+**Identity provider:** Google, imported disabled (`enabled: false`). Once the OAuth credentials exist, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env` and enable the provider by hand in the Keycloak admin console (*Identity providers → google*); setting the variables alone does not enable it.
 
 ## Quick Start
 
