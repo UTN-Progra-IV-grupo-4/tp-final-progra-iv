@@ -1,6 +1,5 @@
 using System.Security.Claims;
-using Availability.Web.Application;
-using Availability.Web.Domain;
+using Availability.Application.ReservationRequests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -40,7 +39,8 @@ public class ReservationController : ControllerBase
             {
                 message = "solicitud recibida",
                 requestId = reservationRequest.Id,
-                status = reservationRequest.Status.ToString()
+                // The entity has no status: every accepted request starts as Pending until Booking decides.
+                status = "Pending"
             });
         }
         catch (InvalidOperationException ex)

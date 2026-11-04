@@ -1,7 +1,8 @@
 using System.Text.Json;
-using Availability.Web.Abstractions;
+using Availability.Application.Abstractions;
+using Microsoft.Extensions.Logging;
 
-namespace Availability.Web.Infrastructure;
+namespace Availability.Infrastructure.Messaging;
 
 public class LoggingMessagePublisher : IMessagePublisher
 {

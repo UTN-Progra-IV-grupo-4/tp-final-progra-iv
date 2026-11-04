@@ -1,7 +1,7 @@
-using Availability.Web.Application;
-using Availability.Web.Domain;
+using Availability.Application.Abstractions;
+using Availability.Domain.Entities;
 
-namespace Availability.Web.Infrastructure;
+namespace Availability.Infrastructure.Persistence.Repositories;
 
 public class InMemoryReservationRequestRepository : IReservationRequestRepository
 {

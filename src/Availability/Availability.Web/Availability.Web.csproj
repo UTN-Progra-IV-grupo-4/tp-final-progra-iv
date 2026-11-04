@@ -10,7 +10,6 @@
   <!-- MVC utiliza los casos de uso expuestos por Application. -->
   <ItemGroup>
     <ProjectReference Include="..\Availability.Application\Availability.Application.csproj" />
-    <ProjectReference Include="..\..\Contracts\Contracts.csproj" />
     <!-- Solo el punto de composición (Program.cs) registra las implementaciones concretas. -->
     <ProjectReference Include="..\Availability.Infrastructure\Availability.Infrastructure.csproj" />
   </ItemGroup>

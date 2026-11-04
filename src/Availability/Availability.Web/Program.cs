@@ -1,30 +1,16 @@
+using Availability.Application.ReservationRequests;
 using Availability.Infrastructure;
-using Availability.Web.Abstractions;
-using Availability.Web.Application;
-using Availability.Web.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-builder.Services.AddScoped<IReservationRequestRepository, InMemoryReservationRequestRepository>();
 
-var brokerProvider = builder.Configuration["Broker:Provider"] ?? "AzureServiceBus";
-builder.Services.AddScoped<IMessagePublisher>(provider =>
-{
-    if (string.Equals(brokerProvider, "RabbitMq", StringComparison.OrdinalIgnoreCase))
-    {
-        return new RabbitMqMessagePublisher(provider.GetRequiredService<ILogger<RabbitMqMessagePublisher>>());
-    }
-
-    // Temporary placeholder until the real broker implementation is introduced in a dedicated PR.
-    return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
-});
-
+// Web conecta las capas al iniciar; los controladores utilizan Application.
+builder.Services.AddInfrastructure(
+    builder.Configuration.GetConnectionString("Availability"),
+    builder.Configuration["Broker:Provider"]);
 builder.Services.AddScoped<ReservationRequestHandler>();
-
-// Web conecta las capas al iniciar; los futuros controladores utilizarán Application.
-builder.Services.AddInfrastructure(builder.Configuration.GetConnectionString("Availability"));
 
 var app = builder.Build();
 

@@ -1,8 +1,8 @@
-using Availability.Web.Abstractions;
-using Availability.Web.Domain;
+using Availability.Application.Abstractions;
+using Availability.Domain.Entities;
 using Contracts;
 
-namespace Availability.Web.Application;
+namespace Availability.Application.ReservationRequests;
 
 public class ReservationRequestHandler
 {
@@ -37,10 +37,8 @@ public class ReservationRequestHandler
         {
             Id = Guid.NewGuid(),
             SeatId = command.SeatId,
-            EventId = command.EventId,
             UserId = userId,
-            Status = ReservationRequestStatus.Pending,
-            CreatedAt = DateTime.UtcNow
+            RequestedAt = DateTimeOffset.UtcNow
         };
 
         await _repository.AddAsync(reservationRequest, cancellationToken);
@@ -49,10 +47,10 @@ public class ReservationRequestHandler
         {
             MessageId = reservationRequest.Id,
             CorrelationId = reservationRequest.Id.ToString(),
-            EventId = reservationRequest.EventId,
+            EventId = command.EventId,
             SeatId = reservationRequest.SeatId,
             UserId = reservationRequest.UserId,
-            RequestedAt = reservationRequest.CreatedAt
+            RequestedAt = reservationRequest.RequestedAt.UtcDateTime
         };
 
         await _messagePublisher.PublishAsync(message, cancellationToken);

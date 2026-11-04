@@ -1,4 +1,4 @@
-namespace Availability.Web.Abstractions;
+namespace Availability.Application.Abstractions;
 
 public interface IMessagePublisher
 {

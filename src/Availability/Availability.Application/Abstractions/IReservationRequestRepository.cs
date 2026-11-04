@@ -1,6 +1,6 @@
-using Availability.Web.Domain;
+using Availability.Domain.Entities;
 
-namespace Availability.Web.Application;
+namespace Availability.Application.Abstractions;
 
 public interface IReservationRequestRepository
 {

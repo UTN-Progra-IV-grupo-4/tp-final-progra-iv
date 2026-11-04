@@ -1,12 +1,16 @@
+using Availability.Application.Abstractions;
+using Availability.Infrastructure.Messaging;
 using Availability.Infrastructure.Persistence;
+using Availability.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Availability.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString, string? brokerProvider = null)
     {
         services.AddDbContext<AvailabilityDbContext>(options =>
         {
@@ -22,6 +26,20 @@ public static class DependencyInjection
             // La configuración de ejecución y la fábrica de migraciones deben coincidir.
             options.UseNpgsql(connectionString, postgres => postgres.SetPostgresVersion(16, 0));
         });
+
+        services.AddScoped<IReservationRequestRepository, InMemoryReservationRequestRepository>();
+
+        services.AddScoped<IMessagePublisher>(provider =>
+        {
+            if (string.Equals(brokerProvider, "RabbitMq", StringComparison.OrdinalIgnoreCase))
+            {
+                return new RabbitMqMessagePublisher(provider.GetRequiredService<ILogger<RabbitMqMessagePublisher>>());
+            }
+
+            // Temporary placeholder until the real broker implementation is introduced in a dedicated PR.
+            return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
+        });
+
         return services;
     }
 }

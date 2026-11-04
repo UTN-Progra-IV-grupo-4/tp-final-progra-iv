@@ -1,4 +1,4 @@
-namespace Availability.Web.Application;
+namespace Availability.Application.ReservationRequests;
 
 public class ReservationRequestCommand
 {
