@@ -1,3 +1,4 @@
+using Booking.Business.Services;
 using Booking.Business.Reservations;
 using Booking.Data;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,10 @@ public static class BookingBusinessServiceCollectionExtensions
         services.AddScoped<IReservationRequestProcessor, ReservationRequestProcessor>();
         services.AddScoped<IExpireRetainedReservations, ExpireRetainedReservations>();
         services.TryAddSingleton(TimeProvider.System);
+
+        // Comparte el ámbito con el repositorio y el contexto.
+        services.AddScoped<ReservationStatusService>();
+        services.AddScoped<OccupiedSeatsService>();
 
         return services;
     }
