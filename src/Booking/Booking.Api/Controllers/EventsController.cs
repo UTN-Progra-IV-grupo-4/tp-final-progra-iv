@@ -1,5 +1,7 @@
+using Booking.Api.Authentication;
 using Booking.Business.Dtos;
 using Booking.Business.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Booking.Api.Controllers;
@@ -17,7 +19,7 @@ public class EventsController : ControllerBase
         _occupiedSeatsService = occupiedSeatsService;
     }
 
-    // TODO(#11): exigir un token de servicio con permiso para consultar Booking
+    [Authorize(Policy = ServiceAuthenticationPolicies.AvailabilityService)]
     [HttpGet("{eventId}/occupied-seats")]
     [ProducesResponseType(
         typeof(OccupiedSeatsResponse),

@@ -1,5 +1,7 @@
+using Booking.Api.Authentication;
 using Booking.Business.Dtos;
 using Booking.Business.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Booking.Api.Controllers;
@@ -18,7 +20,7 @@ public class ReservationsController : ControllerBase
         _reservationStatusService = reservationStatusService;
     }
 
-    // TODO(#11): exigir un token de servicio con permiso para consultar Booking
+    [Authorize(Policy = ServiceAuthenticationPolicies.AvailabilityService)]
     [HttpGet("{requestId}/status")]
     [ProducesResponseType(
         typeof(ReservationStatusResponse),
