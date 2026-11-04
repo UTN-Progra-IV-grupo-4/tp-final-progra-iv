@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Contracts.Payment;
 using Grpc.Core;
 using Payment.Business;
@@ -63,12 +64,17 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
     };
 
     // Devuelve null para dejar pasar la excepción sin traducir: gRPC responde UNKNOWN y Booking la
-    // manda a la DLQ. Así queda una base caída, porque el cobro pudo aprobarse con la fila en Pending
-    // y conviene revisarlo a mano antes que reintentar.
+    // manda a la DLQ para revisión manual.
     private static StatusCode? ToStatusCode(Exception exception) => exception switch
     {
         // Falla técnica de la pasarela: el cobro quedó Failed, sin cargo, y Booking puede reintentar.
         HttpRequestException => StatusCode.Unavailable,
+        // Base caída (conexión rechazada, timeout): Booking reintenta y, si se agota, registra el posible
+        // cobro tardío, que se coteja por reservation_id. Solo las transitorias: una contraseña mal
+        // configurada o un error de SQL no se arreglan reintentando. DbException y no la de EF, para no
+        // atar la presentación al ORM; EF la envuelve al guardar, por eso se mira también InnerException.
+        DbException { IsTransient: true } or { InnerException: DbException { IsTransient: true } }
+            => StatusCode.Unavailable,
         // Antes que InvalidOperationException porque hereda de ella: es un bug, no un cobro en curso.
         ObjectDisposedException => StatusCode.Internal,
         // Cobro en curso (Pending): ABORTED y no UNAVAILABLE, porque Payment sí está accesible.
@@ -84,7 +90,7 @@ public class PaymentGrpcService(ChargeService chargeService, ILogger<PaymentGrpc
     private static string Describe(StatusCode code) => code switch
     {
         StatusCode.Aborted => "Ya hay un cobro en curso para esta reserva.",
-        StatusCode.Unavailable => "La pasarela de pago no está disponible.",
+        StatusCode.Unavailable => "Payment no puede procesar el cobro en este momento. Reintentar.",
         StatusCode.InvalidArgument => "El pedido no coincide con el cobro registrado para esta reserva.",
         _ => "Error interno de Payment."
     };
