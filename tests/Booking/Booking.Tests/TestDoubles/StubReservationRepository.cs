@@ -15,9 +15,11 @@ public sealed class StubReservationRepository : IReservationRepository
     public List<int> ExpirationBatchSizes { get; } = [];
     public List<(Guid ReservationId, DateTimeOffset Now)> ExpirationAttempts { get; } = [];
     public List<(Guid EventId, Guid SeatId, DateTimeOffset Now)> SeatExpirationAttempts { get; } = [];
-
     public Exception? PaymentTransitionException { get; set; }
-
+    public Dictionary<Guid, Reservation> ReservationsById => storedReservations;
+    public Dictionary<(Guid EventId, DateTimeOffset Now), IReadOnlyList<Guid>>
+        OccupiedSeatsByQuery
+    { get; } = [];
     public void EnqueueResult(ReservationInsertResult result) => results.Enqueue(result);
 
     public void Seed(Reservation reservation) =>
@@ -40,6 +42,16 @@ public sealed class StubReservationRepository : IReservationRepository
         {
             expirationFailures.Add(reservation.Id);
         }
+    }
+
+    public Task<IReadOnlyList<Guid>> GetOccupiedSeatIdsAsync(
+        Guid eventId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        OccupiedSeatsByQuery.TryGetValue((eventId, now), out var seatIds);
+        return Task.FromResult<IReadOnlyList<Guid>>(seatIds ?? []);
     }
 
     public Task<ReservationInsertResult> TryInsertAsync(

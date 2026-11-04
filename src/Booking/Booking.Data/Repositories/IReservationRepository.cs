@@ -6,7 +6,12 @@ namespace Booking.Data.Repositories;
 public interface IReservationRepository
 {
     Task<Reservation?> GetByIdAsync(
-        Guid reservationId,
+        Guid requestId,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<Guid>> GetOccupiedSeatIdsAsync(
+        Guid eventId,
+        DateTimeOffset now,
         CancellationToken cancellationToken = default);
 
     Task<ReservationInsertResult> TryInsertAsync(

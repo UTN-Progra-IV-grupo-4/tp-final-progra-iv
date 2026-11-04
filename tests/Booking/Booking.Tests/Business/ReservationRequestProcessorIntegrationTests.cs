@@ -332,6 +332,17 @@ public sealed class ReservationRequestProcessorIntegrationTests(PostgreSqlFixtur
             CancellationToken cancellationToken = default) =>
             innerRepository.GetExpiredReservationsAsync(now, batchSize, cancellationToken);
 
+        public Task<Reservation?> GetByIdAsync(
+            Guid requestId,
+            CancellationToken cancellationToken = default) =>
+            innerRepository.GetByIdAsync(requestId, cancellationToken);
+
+        public Task<IReadOnlyList<Guid>> GetOccupiedSeatIdsAsync(
+            Guid eventId,
+            DateTimeOffset now,
+            CancellationToken cancellationToken = default) =>
+            innerRepository.GetOccupiedSeatIdsAsync(eventId, now, cancellationToken);
+
         public async Task<bool> TryExpireAsync(
             Guid candidateReservationId,
             DateTimeOffset now,
