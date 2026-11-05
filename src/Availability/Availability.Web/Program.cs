@@ -10,8 +10,10 @@ builder.Services.AddControllersWithViews();
 // Web conecta las capas al iniciar; los controladores utilizan Application.
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Availability"),
-    builder.Configuration["Broker:Provider"]);
+    builder.Configuration["Broker:Provider"],
+    useFakeBookingClient: builder.Environment.IsDevelopment());
 builder.Services.AddScoped<ReservationRequestHandler>();
+builder.Services.AddScoped<ReservationStatusHandler>();
 
 // Cookie scheme as the default so [Authorize] challenges instead of throwing a 500.
 // #14 (OIDC login) will plug the OpenID Connect challenge on top of this cookie scheme.

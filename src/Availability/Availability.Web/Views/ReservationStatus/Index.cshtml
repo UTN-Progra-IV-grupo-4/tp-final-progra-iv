@@ -1,0 +1,90 @@
+@using Availability.Application.Abstractions
+@model Availability.Web.Models.ReservationStatusViewModel
+@{
+    ViewData["Title"] = "Estado de la reserva";
+}
+<div class="text-center">
+    <h1 class="display-6">Estado de tu solicitud</h1>
+    <p class="text-muted">Solicitud @Model.RequestId</p>
+    @if (Model.BookingUnavailable)
+    {
+        <div class="alert alert-warning">
+            No pudimos consultar el estado en este momento. Tu solicitud no fue rechazada; probá de nuevo en unos minutos.
+        </div>
+    }
+    else if (Model.Status is null)
+    {
+        <div class="alert alert-info">
+            <strong>Procesando</strong><br />
+            Tu solicitud todavía se está procesando.
+        </div>
+    }
+    else
+    {
+        switch (Model.Status)
+        {
+            case ReservationStatus.Retained:
+                <div class="alert alert-primary">
+                    <strong>Retenida</strong><br />
+                    Tu asiento está retenido. Falta confirmar la reserva.
+                </div>
+                break;
+            case ReservationStatus.Confirmed:
+                <div class="alert alert-success">
+                    <strong>Confirmada</strong><br />
+                    Tu reserva está confirmada.
+                </div>
+                break;
+            case ReservationStatus.Rejected:
+                <div class="alert alert-danger">
+                    <strong>Rechazada</strong><br />
+                    @(Model.RejectionReason switch
+                    {
+                        ReservationRejectionReason.SeatTaken => "El asiento ya estaba ocupado.",
+                        ReservationRejectionReason.PaymentFailed => "El pago fue rechazado.",
+                        ReservationRejectionReason.PaymentUnavailable => "El servicio de pagos no estaba disponible.",
+                        _ => "No se indicó el motivo."
+                    })
+                </div>
+                break;
+            case ReservationStatus.Expired:
+                <div class="alert alert-secondary">
+                    <strong>Vencida</strong><br />
+                    La retención del asiento venció.
+                </div>
+                break;
+            default:
+                <div class="alert alert-secondary">
+                    <strong>Estado desconocido</strong><br />
+                    No pudimos interpretar el estado de tu solicitud. Probá de nuevo en unos minutos.
+                </div>
+                break;
+        }
+    }
+    @if (Model.BookingUnavailable || Model.Status is null || Model.Status == ReservationStatus.Retained)
+    {
+        <div id="poll-timeout" class="alert alert-light d-none">
+            Todavía no tenemos respuesta.
+            <a class="btn btn-outline-primary btn-sm ms-2" href="?">Actualizar</a>
+        </div>
+        <script>
+            (() => {
+                // Polling policy agreed in #16: keep asking while processing, retained or while Booking is
+                // unavailable (it may recover), and stop after the max time.
+                const intervalMs = @(Model.PollIntervalSeconds) * 1000;
+                const maxMs = @(Model.PollMaxSeconds) * 1000;
+                const url = new URL(window.location.href);
+                // "desde" only resumes the count after a reload: values that are not positive or that lie
+                // in the future restart it, so it cannot be used to extend the limit.
+                const raw = Number(url.searchParams.get("desde"));
+                const startedAt = raw > 0 && raw <= Date.now() ? raw : Date.now();
+                if (Date.now() - startedAt >= maxMs) {
+                    document.getElementById("poll-timeout").classList.remove("d-none");
+                    return;
+                }
+                url.searchParams.set("desde", startedAt);
+                setTimeout(() => window.location.replace(url), intervalMs);
+            })();
+        </script>
+    }
+</div>
