@@ -7,13 +7,15 @@ Este ticket implementa autenticación de usuarios en el sitio MVC de Availabilit
 ### 1. Modo Desarrollo (Mock)
 
 - Handler de autenticación que siempre autentica un usuario fijo
-- Activo solo en modo Development cuando está configurado
+- Activo solo en Development y solo con `DevelopmentAuthentication:Enabled=true` (por defecto `false` en `appsettings.json`; `true` solo en `appsettings.Development.json`)
+- Si `Enabled=true` en cualquier otro entorno, la aplicación **no arranca** (`InvalidOperationException`); el handler además rechaza autenticar fuera de Development
 - Usuario configurable en `appsettings.Development.json`
 
 ### 2. Modo Producción (Keycloak)
 
-- OpenID Connect con Keycloak
-- Client `availability-web` con PKCE
+- OpenID Connect con Keycloak (flujo authorization code + PKCE S256)
+- Client `availability-web`: **público** (sin client secret), por eso no hay ningún secreto que configurar en la aplicación web
+- Cookie de sesión como esquema por defecto; OIDC solo se invoca desde `AccountController` (login/logout de páginas MVC)
 - Realm `seat-reservation` (configurado en issue #10)
 
 ## Archivos creados/modificados
@@ -45,8 +47,8 @@ Este ticket implementa autenticación de usuarios en el sitio MVC de Availabilit
   - Agregado `Microsoft.AspNetCore.Authentication.OpenIdConnect`
 
 - `src/Availability/Availability.Web/appsettings.json`
-  - Configuración de Keycloak
-  - Configuración de DevelopmentAuthentication (disabled por defecto)
+  - Configuración de Keycloak (`Authority`, `ClientId`)
+  - `DevelopmentAuthentication:Enabled=false` (el usuario fijo vive solo en `appsettings.Development.json`)
 
 - `src/Availability/Availability.Web/appsettings.Development.json`
   - DevelopmentAuthentication habilitado por defecto
@@ -54,7 +56,7 @@ Este ticket implementa autenticación de usuarios en el sitio MVC de Availabilit
 
 - `src/Availability/Availability.Web/Views/Shared/_Layout.cshtml`
   - Agregado menú de usuario con dropdown
-  - Botón de logout cuando autenticado
+  - Botón de logout (formulario POST con anti-forgery) cuando autenticado
   - Botón de login cuando no autenticado
 
 ## Configuración
@@ -74,9 +76,9 @@ En `appsettings.Development.json`:
 }
 ```
 
-### Modo Producción
+### Modo Producción (Keycloak)
 
-En `appsettings.json`:
+En `appsettings.json` (o variables de entorno `Keycloak__Authority`, `Keycloak__ClientId`):
 
 ```json
 {
@@ -90,33 +92,37 @@ En `appsettings.json`:
 }
 ```
 
-O configuración de variables de entorno:
+También se aceptan `KEYCLOAK_ISSUER` y `KEYCLOAK_FRONTEND_CLIENT_ID` como fallback.
 
-```bash
-KEYCLOAK_ISSUER=http://localhost:8080/realms/seat-reservation
-KEYCLOAK_FRONTEND_CLIENT_ID=availability-web
-```
+- **Client secret:** no hay. `availability-web` es un client público (ver `infra/keycloak/realm-export.json`) y la seguridad del code flow la da PKCE. No se configura ni se guarda ningún secreto para el login de usuarios. Si algún día se pasa a un client confidencial, el secreto debe ir en user-secrets (`dotnet user-secrets set Keycloak:ClientSecret ...`) o en una variable de entorno, nunca en el repositorio, y hay que agregar su lectura en `Program.cs`.
+- **HTTPS:** fuera de Development la `Authority` debe ser HTTPS (`RequireHttpsMetadata` es `true`). Para un Keycloak HTTP en un entorno que no sea Development hay que indicarlo con `Keycloak:RequireHttpsMetadata=false` (no recomendado).
+- **Redirect URIs** registradas para el client: `http://localhost:5212/signin-oidc` y `https://localhost:7057/signin-oidc`; post-logout: `.../signout-callback-oidc`. Otro host o puerto requiere actualizar el realm.
+- Las credenciales de servicio (`ServiceCredentials:*`, #51) son independientes de este login.
 
 ## Cómo funciona
 
 ### 1. Login
 
-- Usuario visita `/Account/Login`
-- En modo desarrollo: se autentica con el handler de desarrollo
+- Usuario visita `/Account/Login` y envía el formulario (POST con anti-forgery)
+- En modo desarrollo: se autentica con el handler de desarrollo (usuario fijo de configuración; nada del request define la identidad)
 - En modo producción: se redirige a Keycloak para login OIDC
-- Después de login, se crea cookie de autenticación
+- Después de login, se crea la cookie de autenticación
+- `returnUrl` solo se acepta si es una URL local (`Url.IsLocalUrl`); en otro caso se vuelve a `/`
+- El identificador de usuario que leen `ReservationController` y `ReservationStatusController` sale del claim `sub` o, si el mapeo de claims de ASP.NET lo renombró, de `NameIdentifier` (con Keycloak es el id del usuario del realm; el usuario de desarrollo emite los dos claims con el mismo valor)
+- La cookie guarda los tokens (`SaveTokens`) porque el `id_token` se usa como `id_token_hint` al cerrar sesión; por eso es grande (varios KB, en chunks)
+- Usuarios de ejemplo del realm: `user1` / `user2`, contraseña `User123!`. No tienen nombre ni apellido, así que en el primer login Keycloak pide completar el perfil (acción requerida `VERIFY_PROFILE`)
 
 ### 2. Logout
 
+- Es un POST con anti-forgery (no existe un GET que cierre sesión)
 - En modo desarrollo: solo se elimina la cookie
-- En modo producción: se hace logout de Keycloak y se elimina la cookie
+- En modo producción: se elimina la cookie y se redirige al end-session de Keycloak (con `id_token_hint`), que termina la sesión de Keycloak y vuelve a `/signout-callback-oidc` y luego a Home
 
 ### 3. Protección de endpoints
 
 - El endpoint `/api/reservations` ya tiene `[Authorize]`
-- Usuario anónimo que intenta reservar es redirigido a login
-- API endpoints sin autenticación devuelven 401
-- MVC páginas sin autenticación redirigen a login page
+- `/api/*` sin sesión devuelve 401 (y 403 sin permisos), nunca una redirección a login
+- Las páginas MVC con `[Authorize]` (p. ej. `/reservas/{id}/estado`) redirigen a `/Account/Login?ReturnUrl=...`
 
 ## Criterios de aceptación
 
@@ -130,39 +136,34 @@ KEYCLOAK_FRONTEND_CLIENT_ID=availability-web
 
 ## Pruebas
 
+Automáticas: `tests/Availability/Availability.Tests/UserAuthenticationTests.cs` (handler solo en Development, fallo de arranque fuera de Development, `/api/*` con 401, challenge OIDC con PKCE, `returnUrl` local, logout solo POST y fin de sesión en Keycloak).
+
 ### Modo Desarrollo
 
 1. Iniciar Availability.Web en modo Development
-2. Verificar log: `[AUTH] Using DEVELOPMENT authentication (fixed user)`
-3. Navegar a `/Account/Login`
-4. Hacer click en "Login (Development)"
-5. Verificar que el usuario está autenticado en el navbar
-6. Intentar reservar un asiento (debería funcionar)
-7. Hacer logout
+2. Navegar a `/Account/Login`
+3. Hacer click en "Login (Development)"
+4. Verificar que el usuario está autenticado en el navbar
+5. Reservar un asiento (`POST /api/reservations`): se guarda con `user_id = DevelopmentAuthentication:UserId`
+6. Hacer logout
 
-### Modo Producción
+### Modo Producción (Keycloak)
 
-1. Configurar `DevelopmentAuthentication:Enabled: false`
-2. Iniciar Keycloak (opcional si ya está corriendo)
-3. Iniciar Availability.Web
-4. Verificar log: `[AUTH] Using OPENID CONNECT with Keycloak`
-5. Navegar a `/Account/Login`
-6. Hacer click en "Login con Keycloak"
-7. Iniciar sesión en Keycloak (user1/User123!)
-8. Verificar redirección de vuelta y usuario autenticado
-9. Intentar reservar un asiento
-10. Hacer logout (debería redirigir a Keycloak logout)
+1. Levantar Keycloak con `docker compose up -d keycloak` (el realm se importa solo si está vacío)
+2. Ejecutar Availability.Web con `DevelopmentAuthentication__Enabled=false` (en Development) o en el entorno real
+3. Navegar a `/Account/Login` y hacer click en "Login con Keycloak"
+4. Iniciar sesión en Keycloak (`user1` / `User123!`) y completar el perfil si lo pide
+5. Verificar la redirección de vuelta y el usuario en el navbar
+6. Reservar un asiento: `reservation_requests.user_id` es el id del usuario en Keycloak
+7. Hacer logout: se redirige a Keycloak y la sesión de Keycloak termina (el siguiente login vuelve a pedir contraseña)
 
 ## Importante
 
-⚠️ **El handler de desarrollo NO puede permanecer activo en la demo.**
+⚠️ **El handler de desarrollo no existe fuera de Development.**
 
-Antes de la demo o de mergear a producción, asegurarse de:
-
-1. Configurar `DevelopmentAuthentication:Enabled: false` en `appsettings.json`
-2. Verificar que Keycloak esté corriendo
-3. Probar el flujo de login con Keycloak
-4. Eliminar cualquier configuración de desarrollo en archivos de producción
+- `appsettings.json` trae `DevelopmentAuthentication:Enabled=false`; el usuario fijo solo está en `appsettings.Development.json`
+- Si `Enabled=true` llega por variable de entorno o archivo a un entorno que no es Development, la aplicación falla al arrancar
+- Antes de una demo: confirmar que el entorno no es Development, que Keycloak es accesible por HTTPS y probar el flujo de login
 
 ## Referencias
 
