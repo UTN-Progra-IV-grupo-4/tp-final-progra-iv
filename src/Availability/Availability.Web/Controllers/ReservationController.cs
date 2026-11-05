@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Availability.Application.Logging;
 using Availability.Application.ReservationRequests;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -51,10 +52,15 @@ public class ReservationController : ControllerBase
         }
         catch (ReservationRequestPublishException exception)
         {
+            // The request id is the correlation id of the chain that never started in Booking.
             _logger.LogError(
+                AvailabilityAuditEvents.ReservationRequestPublishFailed,
                 exception.InnerException,
-                "Reservation request {RequestId} could not be published and was removed.",
-                exception.RequestId);
+                "Reservation request could not be published and was removed. Service: {Service}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ErrorCode: {ErrorCode}.",
+                AvailabilityAuditEvents.ServiceName,
+                exception.RequestId,
+                exception.RequestId,
+                "PublishFailed");
 
             // The inner exception message is not exposed: it may describe broker internals.
             return Problem(

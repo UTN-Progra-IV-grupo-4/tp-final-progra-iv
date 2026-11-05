@@ -42,6 +42,7 @@ Message Broker ──────── │
 ## Services
 
 ### Availability
+- Issue #13: [eventos y mapa público de asientos, demo e integración pendiente](docs/availability-13.md).
 - Issue #12: [modelo, configuración de PostgreSQL, migraciones y pendientes de integración](docs/availability-12.md).
 - Exposes seat availability queries (public, no auth required)
 - Accepts reservation requests and publishes them to the broker
@@ -136,9 +137,21 @@ docker compose down
 7. **Status check** — User polls Availability → Availability queries Booking.
 8. **Expiration** — If a retained reservation reaches its timeout with no result, it expires and the seat is released.
 
+## Diagrams
+
+Architecture diagrams are written in Mermaid under [`docs/diagrams/`](docs/diagrams/README.md):
+
+- [System architecture](docs/diagrams/system.md), including the notification service and where the system is eventually consistent
+- [Availability architecture](docs/diagrams/availability-architecture.md) (Clean Architecture)
+- [Booking architecture](docs/diagrams/booking-architecture.md) (N-Layer)
+- [Payment architecture](docs/diagrams/payment-architecture.md) (N-Layer)
+- [Happy path and failure paths](docs/diagrams/happy-path-and-failure.md) (sequence diagrams for the demo)
+
+Each service contract has its own diagram in `docs/contracts/`: [reservation request](docs/contracts/reservation-request.md), [reservation status](docs/contracts/reservation-status.md), [occupied seats](docs/contracts/occupied-seats.md) and [payment](docs/contracts/payment.md).
+
 ## Getting started
 
-Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
+Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. To run the whole system with service authentication, follow [docs/running-locally.md](docs/running-locally.md) (demo script: [docs/demo.md](docs/demo.md)). Everything lives in a single solution:
 
 ```
 TpFinal.sln
@@ -149,6 +162,7 @@ src/
   Contracts/                           .proto files and messages, the only shared project
 infra/
   keycloak/                            Keycloak configuration and realm export
+  scripts/reset-demo-state/            SQL scripts that clear reservations between demo rehearsals
 docker/
   postgres/                            PostgreSQL initialization scripts
 ```

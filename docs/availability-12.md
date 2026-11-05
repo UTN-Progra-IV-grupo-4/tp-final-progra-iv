@@ -26,7 +26,7 @@ Domain no depende de ninguna otra capa. La referencia de Web a Infrastructure se
 - UserId representa el claim sub de OIDC como texto; no es una FK a la base de Keycloak ni debe confiarse en una identidad recibida desde un formulario.
 - El número de asiento es único por evento. Varias solicitudes pueden referirse al mismo asiento; Booking resuelve la concurrencia.
 - Los borrados de eventos con asientos y asientos con solicitudes están restringidos para conservar las relaciones y el historial.
-- Las longitudes y los datos de ejemplo son una propuesta de diseño a revisar con el equipo.
+- Los campos y sus longitudes se coordinan con los consumidores. El catálogo de ejemplo de la demo fue confirmado en #12; #13 lo amplía a veinte asientos por evento.
 
 ## Convención SQL y migraciones
 
@@ -83,18 +83,18 @@ Compose lee .env para configurar sus contenedores; ASP.NET Core desde Visual Stu
 
 ## Datos de ejemplo
 
-Persistence/Scripts/demo-data.sql propone dos eventos y seis asientos con IDs fijos para coordinar una demo con Booking. Se ejecuta manualmente después de aplicar todas las migraciones y no forma parte del arranque de producción. Repetirlo omite los IDs existentes; no actualiza datos modificados.
+Persistence/Scripts/demo-data.sql contiene el catálogo confirmado de dos eventos y veinte asientos por evento (filas A y B, del 1 al 10), con IDs fijos para coordinar la demo con Booking. Conserva los seis IDs originales y agrega los restantes mediante generate_series, sin borrar asientos ni reservas existentes. Se ejecuta manualmente después de aplicar todas las migraciones y no forma parte del arranque de producción. Repetirlo omite los IDs existentes; no actualiza datos modificados.
 
 Desde Git Bash:
 
 ```bash
-docker exec -i postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < src/Availability/Availability.Infrastructure/Persistence/Scripts/demo-data.sql
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < src/Availability/Availability.Infrastructure/Persistence/Scripts/demo-data.sql
 ```
 
 Para inspeccionar datos:
 
 ```bash
-docker exec -it postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME"'
+docker compose exec postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME"'
 ```
 
 Dentro de psql, `\dt` lista las tablas; `SELECT * FROM events;` y `SELECT * FROM seats;` muestran los ejemplos. `\q` permite salir. Si Git Bash informa que la terminal no es TTY, anteponer winpty al comando interactivo.
@@ -111,14 +111,14 @@ El proyecto está incluido en TpFinal.sln y también se descubre con `dotnet tes
 
 Las clases de integración usan `[Collection(PostgreSqlCollection.Name)]` para compartir una fixture y ejecutar las pruebas sin concurrencia sobre la misma base. ResetAsync obtiene las tablas del modelo de EF Core y conserva el historial de migraciones. La prueba de actualización usa otro contenedor aislado porque necesita comenzar con el esquema anterior.
 
-La ejecución automática en GitHub Actions se implementa por separado en #41. Hasta que exista ese workflow, hay que ejecutar los comandos de tests localmente; no se disparan por subir un commit.
+El workflow `.github/workflows/ci.yml` ejecuta la compilación y los tests de la solución en cada PR hacia `develop` o `main` y en cada push a esas ramas. Los tests de PostgreSQL usan Testcontainers con Docker en el runner. Los comandos locales permiten verificar los cambios antes de subirlos; el README describe cómo ejecutar los mismos pasos que el CI.
 
 Se comprueban las migraciones sobre una base vacía, el renombrado conservando datos existentes, la ejecución repetida del seed y la escritura/lectura UTC mediante EF Core. Las restricciones se verifican ejecutando automáticamente constraints.sql, omitiendo únicamente los metacomandos de psql. Ese SQL prueba unicidad, claves foráneas, solicitudes múltiples y borrados restringidos, y revierte sus registros temporales.
 
 El script sigue disponible para una comprobación manual después de migrar:
 
 ```bash
-docker exec -i postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < tests/Availability/Availability.Tests/constraints.sql
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < tests/Availability/Availability.Tests/constraints.sql
 ```
 
 ## Alcance

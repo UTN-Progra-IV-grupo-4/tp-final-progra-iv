@@ -1,3 +1,5 @@
+using Booking.Business.Payments;
+using Booking.Business.Services;
 using Booking.Business.Reservations;
 using Booking.Data;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,9 +13,15 @@ public static class BookingBusinessServiceCollectionExtensions
     {
         services.AddBookingData(connectionString);
         services.AddOptions<ReservationProcessingOptions>();
+        services.AddOptions<PaymentProcessingOptions>();
         services.AddScoped<IReservationRequestProcessor, ReservationRequestProcessor>();
+        services.AddScoped<ReservationPaymentProcessor>();
         services.AddScoped<IExpireRetainedReservations, ExpireRetainedReservations>();
         services.TryAddSingleton(TimeProvider.System);
+
+        // Comparte el ámbito con el repositorio y el contexto.
+        services.AddScoped<ReservationStatusService>();
+        services.AddScoped<OccupiedSeatsService>();
 
         return services;
     }

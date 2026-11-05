@@ -7,4 +7,7 @@ public interface IReservationRequestRepository
     Task<bool> SeatExistsAsync(Guid seatId, Guid eventId, CancellationToken cancellationToken = default);
     Task AddAsync(ReservationRequest reservationRequest, CancellationToken cancellationToken = default);
     Task RemoveAsync(ReservationRequest reservationRequest, CancellationToken cancellationToken = default);
+    Task<ReservationRequest?> GetByIdAsync(Guid requestId, CancellationToken cancellationToken = default);
+    // Same request with its seat and event loaded, for screens that show them.
+    Task<ReservationRequest?> GetByIdWithSeatAsync(Guid requestId, CancellationToken cancellationToken = default);
 }

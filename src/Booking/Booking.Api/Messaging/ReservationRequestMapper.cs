@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Booking.Business.Reservations;
+using Contracts;
 
 namespace Booking.Api.Messaging;
 
@@ -9,10 +10,10 @@ internal sealed class ReservationRequestMapper
     {
         ArgumentNullException.ThrowIfNull(delivery);
 
-        ProvisionalReservationRequestMessage? message;
+        ReservationRequestMessage? message;
         try
         {
-            message = delivery.Body.ToObjectFromJson<ProvisionalReservationRequestMessage>();
+            message = delivery.Body.ToObjectFromJson<ReservationRequestMessage>();
         }
         catch (JsonException)
         {
@@ -68,10 +69,24 @@ internal sealed class ReservationRequestMapper
                 ReservationRequestMappingErrorCodes.CorrelationIdRequired);
         }
 
+        if (!IsSafeCorrelationId(message.CorrelationId))
+        {
+            return ReservationRequestMappingResult.Invalid(
+                ReservationRequestMappingErrorCodes.CorrelationIdInvalid);
+        }
+
         return ReservationRequestMappingResult.Success(
             new ProcessReservationRequest(
                 message.MessageId,
                 message.EventId,
-                message.SeatId));
+                message.SeatId),
+            message.CorrelationId);
     }
+
+    internal static bool IsSafeCorrelationId(string? value) =>
+        value is { Length: > 0 and <= 64 } &&
+        value.All(character => character is
+            (>= 'a' and <= 'z') or
+            (>= 'A' and <= 'Z') or
+            (>= '0' and <= '9') or '-' or '_' or '.');
 }
