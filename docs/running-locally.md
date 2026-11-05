@@ -86,7 +86,7 @@ Debe imprimir `INSERT 0 2` y `INSERT 0 40` la primera vez, y `INSERT 0 0` dos ve
 
 ## 5. Los tres servicios
 
-Corré cada uno en su propia terminal, con `ASPNETCORE_ENVIRONMENT=Development`, desde la raíz del repositorio. Las variables van como variables de entorno o con `dotnet user-secrets` (nunca en un archivo versionado). La notación `A__B` equivale a `A:B`.
+Corré cada uno en su propia terminal, con `ASPNETCORE_ENVIRONMENT=Development`, desde la raíz del repositorio. Cada `dotnet run` compila y tarda unos 10 a 15 s en mostrar `Now listening on`. Las variables van como variables de entorno o con `dotnet user-secrets` (nunca en un archivo versionado). La notación `A__B` equivale a `A:B`.
 
 ```bash
 dotnet run --project src/Payment/Payment.Grpc --launch-profile http
@@ -140,8 +140,8 @@ El puerto 5212 no es casual: es el que el realm tiene como URI de redirección d
 
 1. Entrá a `http://localhost:5212`, elegí un evento y un asiento (sin el aviso "Modo demostración": si aparece, falta `EventQueries__Source=Database`).
 2. Tocá "Reservar este asiento": te lleva a una página "Iniciar Sesión"; tocá "Login con Keycloak", entrá con `user1` / `User123!` y volvés al mapa con el asiento seleccionado.
-3. Tocá "Reservar este asiento" otra vez: aparece "Solicitud recibida" con el id, y de ahí el estado pasa de Procesando a Retenida y Confirmada (requiere el broker; sin Azure se queda en la solicitud recibida).
-4. Caminos de fallo: reservá el mismo asiento con otro usuario (queda Rechazada por asiento ocupado), poné `SimulatedGateway__Mode=Decline` en Payment (pago rechazado) o detené Payment (tres intentos y rechazada por pago no disponible).
+3. Tocá "Reservar este asiento" otra vez: aparece "Solicitud recibida" con el id, y de ahí el estado pasa de Procesando a Confirmada en unos 3 a 6 s (Retenida dura menos de 1 s y casi nunca se ve). Requiere el broker; sin Azure se queda en la solicitud recibida.
+4. Caminos de fallo: para un asiento ocupado (Rechazada por asiento ocupado), reservalo con otro usuario desde un mapa abierto antes de que se confirme (ver [demo.md](demo.md)); poné `SimulatedGateway__Mode=Decline` en Payment (pago rechazado) o detené Payment (tres intentos y rechazada por pago no disponible, unos 11 s en Windows).
 5. Seguir una reserva por los tres servicios: ver `docs/24-logs-de-auditoria.md`.
 6. Para presentar la demo (checklist, guion con tiempos y limitaciones): [demo.md](demo.md).
 
@@ -181,6 +181,12 @@ Cada comando imprime `BEGIN`, `DELETE <n>` y `COMMIT`. Para comprobar que el cat
 
 ```bash
 docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -tAc "select (select count(*) from reservation_requests), (select count(*) from events), (select count(*) from seats)"'
+```
+
+En PowerShell las comillas dobles de ese comando se pierden y no imprime nada; pasá la consulta por la tubería:
+
+```powershell
+'select (select count(*) from reservation_requests), (select count(*) from events), (select count(*) from seats)' | docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -tA'
 ```
 
 Debe devolver `0|2|40`. Después, el mapa de asientos vuelve a mostrar todo libre (recargá la página). Para empezar de cero también con Keycloak y las bases: `docker compose down -v` y repetir desde la sección 3.
