@@ -130,6 +130,26 @@ public sealed class ReservationStatusControllerTests(PostgreSqlFixture fixture)
         Assert.Contains("const startedAt = raw > 0 && raw <= Date.now() ? raw : Date.now();", body);
     }
 
+    [Fact]
+    public async Task Index_PollingConfiguredBelowOneSecond_IsClampedToOneSecond()
+    {
+        var bookingStatusClient = new ConfigurableBookingStatusClient { Answer = _ => null };
+        var requestId = await SeedRequestAsync("user-42");
+        using var factory = CreateFactory(
+            bookingStatusClient,
+            new Dictionary<string, string>
+            {
+                ["ReservationStatusPolling:IntervalSeconds"] = "0",
+                ["ReservationStatusPolling:MaxSeconds"] = "-5"
+            });
+
+        var response = await GetStatusAsync(factory, requestId, "user-42");
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Contains("const intervalMs = 1 * 1000;", body);
+        Assert.Contains("const maxMs = 1 * 1000;", body);
+    }
+
     private async Task<string> GetBodyAsync(Func<Guid, ReservationStatusResult?> answer)
     {
         var bookingStatusClient = new ConfigurableBookingStatusClient { Answer = answer };

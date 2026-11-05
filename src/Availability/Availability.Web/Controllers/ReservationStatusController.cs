@@ -30,12 +30,13 @@ public class ReservationStatusController : Controller
         {
             return Unauthorized();
         }
-        // Polling policy agreed in #16: every 3 s for up to 2 min, configurable.
+        // Polling policy agreed in #16: every 3 s for up to 2 min, configurable (at least 1 s, so a
+        // bad value cannot turn the page into a busy loop).
         var model = new ReservationStatusViewModel
         {
             RequestId = requestId,
-            PollIntervalSeconds = _configuration.GetValue("ReservationStatusPolling:IntervalSeconds", 3),
-            PollMaxSeconds = _configuration.GetValue("ReservationStatusPolling:MaxSeconds", 120)
+            PollIntervalSeconds = Math.Max(1, _configuration.GetValue("ReservationStatusPolling:IntervalSeconds", 3)),
+            PollMaxSeconds = Math.Max(1, _configuration.GetValue("ReservationStatusPolling:MaxSeconds", 120))
         };
         try
         {
