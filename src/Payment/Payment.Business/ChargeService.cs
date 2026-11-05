@@ -23,7 +23,8 @@ public class ChargeService(
         CancellationToken cancellationToken)
     {
         // Inicio de la cadena (punto f): también los reintentos quedan registrados.
-        logger.LogInformation("Inicio de cobro. ReservationId={ReservationId}", reservationId);
+        logger.LogInformation(
+            PaymentAuditEvents.ChargeStarted, "Inicio de cobro. ReservationId={ReservationId}", reservationId);
 
         // 1. ¿Ya existe un cobro para esta reserva?
         var existing = await charges.GetByReservationIdAsync(reservationId, cancellationToken);
@@ -77,8 +78,9 @@ public class ChargeService(
             case ChargeStatus.Approved:
             case ChargeStatus.Declined:
                 logger.LogInformation(
-                    "Reintento resuelto con el cobro guardado. ReservationId={ReservationId} ChargeId={ChargeId}",
-                    existing.ReservationId, existing.Id);
+                    PaymentAuditEvents.ChargeReplayed,
+                    "Reintento resuelto con el cobro guardado. ReservationId={ReservationId} ChargeId={ChargeId} Estado={Status}",
+                    existing.ReservationId, existing.Id, existing.Status);
                 return ToResult(existing, isReplay: true);
 
             case ChargeStatus.Failed:
@@ -173,6 +175,7 @@ public class ChargeService(
 
         // Fin de la cadena (punto f).
         logger.LogInformation(
+            PaymentAuditEvents.ChargeFinished,
             "Fin de cobro. ReservationId={ReservationId} ChargeId={ChargeId} Estado={Status}",
             charge.ReservationId, charge.Id, charge.Status);
 

@@ -1,4 +1,5 @@
 using System.Data.Common;
+using Contracts;
 using Contracts.Payment;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
@@ -14,35 +15,45 @@ public class PaymentGrpcService(
     ILogger<PaymentGrpcService> logger)
     : PaymentService.PaymentServiceBase
 {
-    // Header que manda Booking (#24). gRPC exige claves de metadata en minúsculas.
-    private const string CorrelationIdHeader = "x-correlation-id";
-
-    // Holgado para un GUID (36) o un id con prefijo; un valor más largo no es un id de correlación.
-    private const int MaxCorrelationIdLength = 64;
-    private const string InvalidCorrelationId = "invalido";
+    private const string ServiceName = "Payment";
 
     // xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
     private const int GuidFormatDLength = 36;
 
     public override async Task<ChargeResponse> Charge(ChargeRequest request, ServerCallContext context)
     {
-        var reservationId = ValidateRequest(request);
-
-        // Scope de logging: todos los logs de ChargeService llevan el CorrelationId sin que Business lo conozca.
+        // Scope de logging: todos los logs del cobro llevan Service y CorrelationId sin que Business los conozca.
+        // Se abre antes de validar para que un pedido rechazado también quede asociado a su cadena.
         // Plantilla y no diccionario: la consola la imprime legible y los proveedores estructurados
         // reciben igual CorrelationId como propiedad.
         using var _ = logger.BeginScope(
-            "CorrelationId:{CorrelationId}",
-            SanitizeCorrelationId(context.RequestHeaders.GetValue(CorrelationIdHeader)));
+            "Service:{Service} CorrelationId:{CorrelationId}",
+            ServiceName,
+            CorrelationIdPolicy.Sanitize(context.RequestHeaders.GetValue(CorrelationIdPolicy.HeaderName)));
 
         try
         {
+            var reservationId = ValidateRequest(request);
             var result = await chargeService.ChargeAsync(
                 reservationId, request.AmountCents, request.Currency, context.CancellationToken);
             return ToResponse(result);
         }
+        catch (RpcException exception)
+        {
+            // Fin de la cadena con error (pedido inválido): el código gRPC es el ErrorCode de auditoría.
+            logger.LogWarning(
+                PaymentAuditEvents.ChargeRejected,
+                "Cobro rechazado. ErrorCode={ErrorCode}",
+                exception.StatusCode);
+            throw;
+        }
         catch (Exception exception) when (ToStatusCode(exception) is { } code)
         {
+            logger.LogWarning(
+                PaymentAuditEvents.ChargeRejected,
+                "Cobro terminado con error. ErrorCode={ErrorCode} ExceptionType={ExceptionType}",
+                code,
+                exception.GetType().Name);
             throw new RpcException(new Status(code, Describe(code)));
         }
     }
@@ -69,22 +80,6 @@ public class PaymentGrpcService(
             throw InvalidArgument($"currency no soportada. Monedas aceptadas: {string.Join(", ", supportedCurrencies)}.");
 
         return reservationId;
-    }
-
-    // El header viene de afuera y termina en cada log del cobro: un valor sin límite llenaría los logs
-    // (se probó con 20.000 caracteres). Kestrel ya rechaza los saltos de línea.
-    // Un valor inválido se reemplaza y no se corta: uno cortado parece válido pero ya no coincide con el
-    // de Booking, y en el cotejo confunde más que un marcador explícito. Nunca se rechaza el cobro por esto.
-    private static string? SanitizeCorrelationId(string? value)
-    {
-        // Sin header: Booking puede no mandarlo, y el log muestra CorrelationId:(null).
-        if (string.IsNullOrEmpty(value))
-            return null;
-
-        var isValid = value.Length <= MaxCorrelationIdLength &&
-            value.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.' or ':');
-
-        return isValid ? value : InvalidCorrelationId;
     }
 
     private static RpcException InvalidArgument(string detail) =>

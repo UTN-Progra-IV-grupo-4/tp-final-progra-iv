@@ -336,7 +336,9 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
             Adapter = paymentClientScope is { } clientScope
                 ? (GrpcPaymentChargeClient)clientScope.ServiceProvider.GetRequiredService<IPaymentChargeClient>()
                 : new GrpcPaymentChargeClient(
-                    new PaymentService.PaymentServiceClient(channel!), paymentOptions);
+                    new PaymentService.PaymentServiceClient(channel!),
+                        paymentOptions,
+                        Microsoft.Extensions.Logging.Abstractions.NullLogger<GrpcPaymentChargeClient>.Instance);
 
             var services = new ServiceCollection();
             using var bookingContext = bookingDatabase.CreateDbContext();

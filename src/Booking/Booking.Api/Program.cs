@@ -1,4 +1,5 @@
 using Booking.Api.Authentication;
+using Booking.Api.Logging;
 using Booking.Api.Messaging;
 using Booking.Api.Reservations;
 using Booking.Business;
@@ -52,6 +53,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Before authentication so rejected requests also log with their correlation id.
+app.UseCorrelationId();
 
 app.UseAuthentication();
 app.UseAuthorization();

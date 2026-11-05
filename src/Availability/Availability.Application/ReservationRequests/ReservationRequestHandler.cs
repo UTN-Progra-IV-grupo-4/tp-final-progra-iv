@@ -1,6 +1,9 @@
 using Availability.Application.Abstractions;
+using Availability.Application.Logging;
 using Availability.Domain.Entities;
 using Contracts;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Availability.Application.ReservationRequests;
 
@@ -8,13 +11,18 @@ public class ReservationRequestHandler
 {
     private readonly IReservationRequestRepository _repository;
     private readonly IMessagePublisher _messagePublisher;
+    private readonly ILogger<ReservationRequestHandler> _logger;
 
+    // The logger is optional so callers that only care about the use case need not build one; the
+    // container always supplies the real one.
     public ReservationRequestHandler(
         IReservationRequestRepository repository,
-        IMessagePublisher messagePublisher)
+        IMessagePublisher messagePublisher,
+        ILogger<ReservationRequestHandler>? logger = null)
     {
         _repository = repository;
         _messagePublisher = messagePublisher;
+        _logger = logger ?? NullLogger<ReservationRequestHandler>.Instance;
     }
 
     public async Task<ReservationRequest> HandleAsync(
@@ -43,10 +51,22 @@ public class ReservationRequestHandler
 
         await _repository.AddAsync(reservationRequest, cancellationToken);
 
+        // The request id doubles as the correlation id for the whole chain (broker message, Booking, Payment).
+        // Start of the chain; the user id is personal data and stays out of the audit line.
+        var correlationId = reservationRequest.Id.ToString();
+        _logger.LogInformation(
+            AvailabilityAuditEvents.ReservationRequestStored,
+            "Reservation request stored. Service: {Service}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; EventId: {EventId}; SeatId: {SeatId}.",
+            AvailabilityAuditEvents.ServiceName,
+            reservationRequest.Id,
+            correlationId,
+            command.EventId,
+            reservationRequest.SeatId);
+
         var message = new ReservationRequestMessage
         {
             MessageId = reservationRequest.Id,
-            CorrelationId = reservationRequest.Id.ToString(),
+            CorrelationId = correlationId,
             EventId = command.EventId,
             SeatId = reservationRequest.SeatId,
             UserId = reservationRequest.UserId,
