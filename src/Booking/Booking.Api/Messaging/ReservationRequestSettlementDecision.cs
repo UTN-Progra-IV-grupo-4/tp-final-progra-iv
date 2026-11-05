@@ -14,4 +14,8 @@ internal sealed record ReservationRequestSettlementDecision(
 internal static class ReservationRequestSettlementErrorCodes
 {
     public const string InvalidRequest = "InvalidRequest";
+    public const string PaymentPending = "PaymentPending";
+    public const string PaymentInvalidRequest = "PaymentInvalidRequest";
+    public const string PaymentUnexpectedResponse = "PaymentUnexpectedResponse";
+    public const string PaymentApprovedAfterExpiry = "PaymentApprovedAfterExpiry";
 }

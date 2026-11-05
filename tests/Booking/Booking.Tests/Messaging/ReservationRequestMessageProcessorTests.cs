@@ -54,6 +54,25 @@ public sealed class ReservationRequestMessageProcessorTests
     }
 
     [Fact]
+    public async Task ProcessAsync_WhenTransportCorrelationIdIsUnsafe_DoesNotLogIt()
+    {
+        var unsafeCorrelationId = "line\nbreak";
+        var handler = StubHandler.Returning(
+            ReservationRequestHandlingResult.Invalid(
+                ReservationRequestMappingErrorCodes.CorrelationIdInvalid));
+        var logger = new RecordingLogger<ReservationRequestMessageProcessor>();
+        var processor = new ReservationRequestMessageProcessor(handler, logger);
+
+        await processor.ProcessAsync(
+            CreateDelivery("message-id", unsafeCorrelationId),
+            new RecordingSettlement(),
+            CancellationToken.None);
+
+        Assert.DoesNotContain(logger.Entries, entry =>
+            entry.Message.Contains(unsafeCorrelationId, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task ProcessAsync_WhenHandlerThrows_PropagatesWithoutSettlement()
     {
         var expectedException = new InvalidOperationException("secret-body");

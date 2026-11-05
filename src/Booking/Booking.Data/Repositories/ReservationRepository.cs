@@ -89,6 +89,35 @@ public sealed class ReservationRepository(BookingDbContext dbContext)
         }
     }
 
+    public async Task<bool> TrySetPaymentOutcomeAsync(
+        Guid reservationId,
+        ReservationStatus status,
+        ReservationRejectionReason? rejectionReason,
+        DateTimeOffset utcNow,
+        CancellationToken cancellationToken = default)
+    {
+        if (status is not (ReservationStatus.Confirmed or ReservationStatus.Rejected) ||
+            (status == ReservationStatus.Confirmed && rejectionReason is not null) ||
+            (status == ReservationStatus.Rejected && rejectionReason is not (
+                ReservationRejectionReason.PaymentFailed or ReservationRejectionReason.PaymentUnavailable)))
+        {
+            throw new ArgumentException("A payment transition requires a valid terminal status and reason.");
+        }
+
+        // PostgreSQL applies this predicate and update atomically across Booking replicas.
+        var updated = await dbContext.Reservations
+            .Where(reservation => reservation.Id == reservationId &&
+                reservation.Status == ReservationStatus.Retained &&
+                reservation.ExpiresAt > utcNow)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(reservation => reservation.Status, status)
+                .SetProperty(reservation => reservation.RejectionReason, rejectionReason)
+                .SetProperty(reservation => reservation.ExpiresAt, (DateTimeOffset?)null),
+                cancellationToken);
+
+        return updated == 1;
+    }
+
     public async Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
         DateTimeOffset now,
         int batchSize,

@@ -1,0 +1,41 @@
+# Booking payment processing
+
+This guide describes the Booking flow for [issue #19](https://github.com/UTN-Progra-IV-grupo-4/tp-final-progra-iv/issues/19). Business processes payment through an internal port, Data applies conditional reservation transitions, and the consumer can continue payment after creating or finding a compatible `Retained` reservation. The gRPC adapter is still pending. Both the broker and payment continuation are disabled by default.
+
+## Flow
+
+For a retained reservation, Booking will call Payment through the shared gRPC contract, using `Reservation.Id` as the payment idempotency key. Booking owns the reservation state; Payment owns the charge and its idempotent result.
+
+| Payment result | Booking state |
+| --- | --- |
+| Approved, while the reservation remains `Retained` and `ExpiresAt` is in the future | `Confirmed` |
+| Declined | `Rejected`, reason `PaymentFailed` |
+| Payment unavailable after bounded retries | `Rejected`, reason `PaymentUnavailable`, while the reservation is still eligible for a conditional transition |
+
+The result must be persisted before Booking completes the broker message. A compatible redelivery should continue a reservation that is still `Retained` and unexpired; a terminal or expired reservation should not start another charge. State changes must be conditional on both status and expiration so a late response cannot confirm a reservation whose seat has been released. The team communicated acceptance of recording a late or otherwise unpaired charge in audit logs (#24), without an automatic refund; the decision still needs to be recorded in #19, and cross-service verification remains pending.
+
+## Contract and configuration
+
+The shared contract in `src/Contracts/Protos/payment.proto` (merged with #22; see `docs/contracts/payment.md`) defines `PaymentService.Charge` with `reservation_id` (`string`), `amount_cents` (`int64`), and `currency` (`string`). Its response has approved, declined, and unspecified statuses. Booking must consume that file and not introduce a parallel `.proto`.
+
+Issues #19 and #22 define one fixed price per seat in integer cents: Booking configures `Payment:AmountCents` and sends it as `amount_cents` without conversion. The default placeholder is zero, so a valid price must be configured before enabling payment processing. `Payment:Currency` is a three-uppercase-letter ISO 4217 string; #22 provisionally accepts only `ARS` through a configurable `SupportedCurrencies` list. A repeated `reservation_id` with different amount or currency should produce `INVALID_ARGUMENT` under #22's provisional rule. The Booking → Payment call will carry a service token (#11) and propagate `CorrelationId` in gRPC metadata (#24); those cross-service mechanisms need coordinated integration. Keep credentials and environment specific addresses outside the repository.
+
+No numeric price has been agreed. The `150000` cents in issues #19/#22 is an example, not the configured project price. Booking owns the value in `src/Booking/Booking.Api/appsettings.json` under `Payment:AmountCents` and `Payment:Currency`; the current `0` is invalid for an enabled payment flow. For local Development checks, override those keys with Booking.Api User Secrets or `Payment__AmountCents` and `Payment__Currency` environment variables while keeping both feature switches off until the integration is ready. Once the team agrees on a demo price, record the value in #19 and decide whether to version it in Booking's appsettings for reproducibility. Payment receives and stores the amount; Availability does not supply it.
+
+Issue #19 provisionally proposes a configurable five-second gRPC deadline. `Payment:Deadline` now defaults to five seconds; the actual call deadline and endpoint remain to be implemented in the gRPC adapter. The Business processor defaults to three calls with a one-second delay and checks reservation eligibility before each call. When payment is enabled, startup validation requires a positive amount, uppercase three-letter currency, positive deadline and attempt count, nonnegative delay, and a worst-case call budget (`MaxAttempts × Deadline + (MaxAttempts − 1) × RetryDelay`) below half the configured retention duration. This leaves time for persistence and broker settlement. A local currency syntax check cannot replace Payment's supported-currency validation. These values come from the project issues, not the course example.
+
+## Verification and open decisions
+
+Business logic and consumer settlement are tested with a fake Payment client before the shared contract and server are ready. PostgreSQL integration tests cover conditional confirmation and expiration; duplicate delivery and persistence failure are covered locally with the fake, with cross-service integration still pending. Once the contract is merged, test the gRPC adapter against a local test server; repeat with the real Payment service when #22 is available. The demo in #25 also needs the approved path and Payment absent → `PaymentUnavailable`.
+
+Issue #22 specifies Payment's `SimulatedGateway:Mode` to select simulated outcomes independently of the fixed price. `Approve`, `Decline`, `Slow`, and `Error` are needed; `Expire` appears in the task list but is optional and not part of the demo in the decision text. Expiration should be tested using `TimeProvider` with the official ten-minute retention. The gateway and retry behavior still need implementation and verification.
+
+The issues define this settlement for ambiguous cases: `Pending` maps to `ABORTED` and retries three times with the same `reservation_id`; exhausted attempts send the message to dead-letter while the reservation remains `Retained`. The expiration job in #20 is now integrated and releases the seat after the ten-minute retention. `Unavailable` and `DeadlineExceeded` use bounded retries with the same key; after exhaustion Booking persists `Rejected/PaymentUnavailable` and completes the message if the reservation is still eligible. If it expired during the attempts, Booking keeps it `Expired` and still logs the unknown payment result after completing the message. The #22 owner can reconcile it by looking up the Payment row by `reservation_id`; the contract has no lookup RPC. An observed late `APPROVED` does not confirm an expired reservation and has no automatic refund. It is logged as a late charge for the #24 owner to review. The no-refund limitation still needs explicit acceptance recorded in #19. Invalid Payment requests and unexpected responses still use safe dead-letter reasons locally pending review with the shared contract. The #18/#19 owner follows the [Booking DLQ review procedure](payment-dlq-review.md); ownership should be recorded with the team. Payment retries do not depend on the subscription's uncontrolled `MaxDeliveryCount`.
+
+Availability #15 generates `correlationId` in the message body. Booking accepts only ASCII letters, digits, `-`, `_` and `.` with a maximum of 128 characters; invalid values receive `CorrelationIdInvalid` in dead-letter. Booking passes the valid value to its payment port; the future gRPC adapter must send it as `x-correlation-id` metadata. Audit records should include service name and result/error code alongside safe identifiers, without message body or credentials. The local logs cover selected outcomes; the complete cross-service audit belongs to #24.
+
+## Startup checks and message lock
+
+With `Payment:Enabled=true`, Booking fails at startup (`ValidateOnStart`) when no `IPaymentChargeClient` is registered, instead of redelivering every message in a loop. Until the gRPC adapter exists, keep `Payment:Enabled` false.
+
+The worst-case payment time per delivery with the defaults is about 17 s (3 × 5 s deadline + 2 × 1 s delay), plus persistence. The consumer uses the Azure Service Bus SDK processor with its default automatic lock renewal (`MaxAutoLockRenewalDuration`, 5 minutes), so the subscription lock duration does not need to cover the whole bound; it only needs to be long enough for the SDK to renew it (the 60 s default is fine). Startup validation keeps the worst case under half the retention duration (5 minutes), which stays below that renewal limit. If the consumer is later configured with a shorter `MaxAutoLockRenewalDuration`, keep it above the payment time bound.
