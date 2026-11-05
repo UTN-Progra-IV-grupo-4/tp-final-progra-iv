@@ -1,9 +1,6 @@
 extern alias paymentgrpc;
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
 using Booking.Api.Messaging;
 using Booking.Api.Payments;
 using Booking.Business;
@@ -17,6 +14,7 @@ using Grpc.Net.Client;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -188,13 +186,15 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
     public async Task SeparatePaymentProcess_ReceivesBookingChargeOverLocalHttp2()
     {
         await ResetAsync();
+        await using var keycloak = await FakeKeycloak.StartAsync();
         await using var paymentProcess = await PaymentProcess.StartAsync(
-            paymentDatabase.GetConnectionString());
+            paymentDatabase.GetConnectionString(), keycloak.Authority);
         await using var harness = await Harness.StartAsync(
             bookingDatabase,
             paymentDatabase.GetConnectionString(),
             SimulatedMode.Approve,
-            externalPaymentAddress: paymentProcess.Address);
+            externalPaymentAddress: paymentProcess.Address,
+            keycloak: keycloak);
 
         var settlement = await harness.ProcessAsync();
         var reservation = await ReadReservationAsync(harness.RequestId);
@@ -210,6 +210,8 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
         Assert.Equal(StoredChargeStatus.Approved, charge.Status);
         Assert.Equal(150000, charge.AmountCents);
         Assert.Equal("ARS", charge.Currency);
+        // Payment accepted a token that Booking obtained with its real client credentials provider.
+        Assert.Equal(1, keycloak.TokenRequestCount);
         Assert.Contains(harness.BookingLogs.Messages, message =>
             message.Contains("correlation-19", StringComparison.Ordinal) &&
             message.Contains(harness.RequestId.ToString(), StringComparison.Ordinal));
@@ -249,7 +251,9 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
     private sealed class Harness : IAsyncDisposable
     {
         private readonly WebApplication? paymentApp;
-        private readonly GrpcChannel channel;
+        private readonly GrpcChannel? channel;
+        private readonly ServiceProvider? paymentClientServices;
+        private readonly AsyncServiceScope? paymentClientScope;
         private readonly ServiceProvider bookingServices;
         private readonly ReservationRequestMessageProcessor processor;
 
@@ -266,7 +270,8 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
             string paymentConnectionString,
             SimulatedMode mode,
             TimeSpan deadline,
-            string? externalPaymentAddress)
+            string? externalPaymentAddress,
+            FakeKeycloak? keycloak)
         {
             if (externalPaymentAddress is null)
             {
@@ -297,7 +302,27 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
             }
             else
             {
-                channel = GrpcChannel.ForAddress(externalPaymentAddress);
+                // The real registration: gRPC client factory, bearer token handler and token provider.
+                var configuration = new ConfigurationBuilder()
+                    .AddInMemoryCollection(new Dictionary<string, string?>
+                    {
+                        ["Payment:Enabled"] = "true",
+                        ["Payment:Address"] = externalPaymentAddress,
+                        ["Payment:AmountCents"] = "150000",
+                        ["Payment:Currency"] = "ARS",
+                        ["Payment:Deadline"] = deadline.ToString(),
+                        ["ReservationProcessing:RetentionDuration"] = "00:10:00",
+                        ["ServiceCredentials:Authority"] = keycloak!.Authority,
+                        ["ServiceCredentials:ClientId"] = "booking-service",
+                        ["ServiceCredentials:ClientSecret"] = "local-test-secret",
+                        ["ServiceCredentials:RequireHttpsMetadata"] = "false"
+                    })
+                    .Build();
+                var clientServices = new ServiceCollection();
+                clientServices.AddLogging();
+                clientServices.AddBookingMessaging(configuration);
+                paymentClientServices = clientServices.BuildServiceProvider();
+                paymentClientScope = paymentClientServices.CreateAsyncScope();
             }
             var paymentOptions = Options.Create(new PaymentProcessingOptions
             {
@@ -308,8 +333,10 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
                 RetryDelay = TimeSpan.FromMilliseconds(10),
                 Deadline = deadline
             });
-            Adapter = new GrpcPaymentChargeClient(
-                new PaymentService.PaymentServiceClient(channel), paymentOptions);
+            Adapter = paymentClientScope is { } clientScope
+                ? (GrpcPaymentChargeClient)clientScope.ServiceProvider.GetRequiredService<IPaymentChargeClient>()
+                : new GrpcPaymentChargeClient(
+                    new PaymentService.PaymentServiceClient(channel!), paymentOptions);
 
             var services = new ServiceCollection();
             using var bookingContext = bookingDatabase.CreateDbContext();
@@ -333,9 +360,10 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
             string paymentConnectionString,
             SimulatedMode mode,
             TimeSpan? deadline = null,
-            string? externalPaymentAddress = null) => Task.FromResult(new Harness(
+            string? externalPaymentAddress = null,
+            FakeKeycloak? keycloak = null) => Task.FromResult(new Harness(
                 bookingDatabase, paymentConnectionString, mode,
-                deadline ?? TimeSpan.FromSeconds(5), externalPaymentAddress));
+                deadline ?? TimeSpan.FromSeconds(5), externalPaymentAddress, keycloak));
 
         public async Task<RecordingSettlement> ProcessAsync()
         {
@@ -359,120 +387,13 @@ public sealed class BookingPaymentRealIntegrationTests(PostgreSqlFixture booking
         public async ValueTask DisposeAsync()
         {
             await bookingServices.DisposeAsync();
-            channel.Dispose();
+            if (paymentClientScope is { } clientScope)
+                await clientScope.DisposeAsync();
+            if (paymentClientServices is not null)
+                await paymentClientServices.DisposeAsync();
+            channel?.Dispose();
             if (paymentApp is not null)
                 await paymentApp.DisposeAsync();
-        }
-    }
-
-    private sealed class PaymentProcess : IAsyncDisposable
-    {
-        private readonly Process process;
-        public string Address { get; }
-        public ConcurrentQueue<string> LogLines { get; } = new();
-
-        private PaymentProcess(Process process, string address)
-        {
-            this.process = process;
-            Address = address;
-            process.OutputDataReceived += (_, eventArgs) => AddLog(eventArgs.Data);
-            process.ErrorDataReceived += (_, eventArgs) => AddLog(eventArgs.Data);
-            process.BeginOutputReadLine();
-            process.BeginErrorReadLine();
-        }
-
-        public static async Task<PaymentProcess> StartAsync(string connectionString)
-        {
-            var portPicker = new TcpListener(IPAddress.Loopback, 0);
-            portPicker.Start();
-            var port = ((IPEndPoint)portPicker.LocalEndpoint).Port;
-            portPicker.Stop();
-            var address = $"http://127.0.0.1:{port}";
-
-            var assemblyPath = typeof(PaymentGrpcService).Assembly.Location;
-            var startInfo = new ProcessStartInfo("dotnet")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                WorkingDirectory = FindPaymentProjectDirectory()
-            };
-            startInfo.ArgumentList.Add(assemblyPath);
-            startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Production";
-            startInfo.Environment["ConnectionStrings__Payment"] = connectionString;
-            startInfo.Environment["SimulatedGateway__Mode"] = "Approve";
-            startInfo.Environment["Charge__SupportedCurrencies__0"] = "ARS";
-            startInfo.Environment["Charge__PendingTimeoutSeconds"] = "60";
-            startInfo.Environment["Kestrel__Endpoints__Grpc__Url"] = address;
-            startInfo.Environment["Kestrel__Endpoints__Grpc__Protocols"] = "Http2";
-
-            var process = Process.Start(startInfo) ??
-                throw new InvalidOperationException("Could not start local Payment process.");
-            var instance = new PaymentProcess(process, address);
-            try
-            {
-                var until = DateTime.UtcNow.AddSeconds(15);
-                while (DateTime.UtcNow < until)
-                {
-                    if (process.HasExited)
-                        throw new InvalidOperationException("Local Payment process exited before listening.");
-
-                    try
-                    {
-                        using var socket = new TcpClient();
-                        await socket.ConnectAsync(IPAddress.Loopback, port);
-                        return instance;
-                    }
-                    catch (SocketException)
-                    {
-                        await Task.Delay(100);
-                    }
-                }
-
-                throw new TimeoutException("Local Payment process did not listen within 15 seconds.");
-            }
-            catch
-            {
-                await instance.DisposeAsync();
-                throw;
-            }
-        }
-
-        private void AddLog(string? line)
-        {
-            if (line is not null)
-                LogLines.Enqueue(line);
-        }
-
-        public async Task WaitForLogAsync(Func<string, bool> predicate)
-        {
-            var until = DateTime.UtcNow.AddSeconds(3);
-            while (!LogLines.Any(predicate) && DateTime.UtcNow < until)
-                await Task.Delay(25);
-        }
-
-        private static string FindPaymentProjectDirectory()
-        {
-            for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-                 directory is not null;
-                 directory = directory.Parent)
-            {
-                var projectDirectory = Path.Combine(directory.FullName, "src", "Payment", "Payment.Grpc");
-                if (File.Exists(Path.Combine(projectDirectory, "Payment.Grpc.csproj")))
-                    return projectDirectory;
-            }
-
-            throw new DirectoryNotFoundException("Payment.Grpc project directory was not found.");
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (!process.HasExited)
-                process.Kill(entireProcessTree: true);
-            await process.WaitForExitAsync();
-            process.Dispose();
         }
     }
 
