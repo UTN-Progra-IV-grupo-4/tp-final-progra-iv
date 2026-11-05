@@ -9,8 +9,12 @@ using ServiceAuthentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
+// Booking sigue una arquitectura N-Layer: Api -> Business -> Data. Cada capa solo conoce a la de
+// abajo, por eso Api no accede a Data directamente: pasa siempre por Business, que concentra las
+// reglas de reserva. El modelo es anémico a propósito (las entidades solo transportan datos).
+// Este archivo es la raíz de composición de la capa Api.
+// Como microservicio expone REST, consume solicitudes del broker, cobra contra Payment por gRPC y
+// se autentica con client credentials de Keycloak.
 var bookingConnectionString = builder.Configuration.GetConnectionString("Booking");
 if (string.IsNullOrWhiteSpace(bookingConnectionString))
 {
@@ -39,14 +43,12 @@ builder.Services.AddServiceAuthentication(builder.Configuration);
 builder.Services.AddServiceTokenProvider(builder.Configuration);
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
 app.WarnWhenServiceAuthenticationIsNotConfigured();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();

@@ -7,6 +7,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Booking.Business;
 
+// Capa Business del N-Layer de Booking (Api -> Business -> Data): concentra las reglas de reserva y
+// de cobro. Solo conoce a Data; los detalles de transporte (HTTP, broker, gRPC) quedan en Api, que
+// implementa los puertos que Business define. Registra también Data para que Api no la referencie.
 public static class BookingBusinessServiceCollectionExtensions
 {
     public static IServiceCollection AddBookingBusiness(this IServiceCollection services, string connectionString)

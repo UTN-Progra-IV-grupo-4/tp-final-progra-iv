@@ -10,7 +10,6 @@ public class ReservationStatusService
     private readonly IReservationRepository _reservationRepository;
     private readonly TimeProvider _timeProvider;
 
-    // Recibe el repositorio y el reloj mediante inyección de dependencias.
     public ReservationStatusService(
         IReservationRepository reservationRepository,
         TimeProvider timeProvider)

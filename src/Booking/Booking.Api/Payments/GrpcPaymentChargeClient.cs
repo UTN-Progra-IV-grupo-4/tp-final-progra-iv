@@ -8,7 +8,8 @@ using ServiceAuthentication;
 
 namespace Booking.Api.Payments;
 
-// The transport adapter keeps generated protobuf types and gRPC status codes out of Business.
+// Adaptador del puerto IPaymentChargeClient (definido en Business): aísla los tipos protobuf
+// generados y los códigos de estado gRPC en Api, y traduce los fallos a PaymentChargeFailure.
 internal sealed class GrpcPaymentChargeClient(
     PaymentService.PaymentServiceClient client,
     IOptions<PaymentProcessingOptions> options,

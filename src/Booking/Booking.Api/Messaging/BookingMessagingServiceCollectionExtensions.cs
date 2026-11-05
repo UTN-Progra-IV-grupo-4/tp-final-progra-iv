@@ -52,7 +52,7 @@ internal static class BookingMessagingServiceCollectionExtensions
         {
             // The generated client and its adapter are registered together. An enabled consumer
             // cannot start processing messages without an IPaymentChargeClient.
-            // Payment only accepts the booking-service token (#51), so the client always carries it.
+            // Payment only accepts the booking-service token, so the client always carries it.
             services.AddServiceTokenProvider(configuration);
             services.AddGrpcClient<PaymentService.PaymentServiceClient>(options =>
                     options.Address = new Uri(configuration["Payment:Address"]!))

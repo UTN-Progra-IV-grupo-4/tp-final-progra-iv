@@ -9,7 +9,6 @@ public class OccupiedSeatsService
     private readonly IReservationRepository _reservationRepository;
     private readonly TimeProvider _timeProvider;
 
-    // Recibe el acceso a datos y el reloj mediante inyección.
     public OccupiedSeatsService(
         IReservationRepository reservationRepository,
         TimeProvider timeProvider)

@@ -13,7 +13,6 @@ public class ReservationsController : ControllerBase
 {
     private readonly ReservationStatusService _reservationStatusService;
 
-    // Recibe el servicio mediante inyección de dependencias.
     public ReservationsController(
         ReservationStatusService reservationStatusService)
     {

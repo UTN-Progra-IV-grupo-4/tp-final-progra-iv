@@ -1,6 +1,6 @@
 namespace Booking.Api.Logging;
 
-// Audit events of Booking (ticket #24). The numeric id shows in the console as Category[id] and is
+// Audit events of Booking. The numeric id shows in the console as Category[id] and is
 // stable: filter by it, not by the message text. Ids 2xxx belong to Booking.
 internal static class BookingAuditEvents
 {
@@ -15,10 +15,10 @@ internal static class BookingAuditEvents
     // End of the chain in Booking: the message went to the dead-letter queue; ErrorCode is the reason.
     public static readonly EventId ReservationMessageDeadLettered = new(2003, nameof(ReservationMessageDeadLettered));
 
-    // Payment result unknown after bounded attempts (possible late charge, #19).
+    // Payment result unknown after bounded attempts (possible late charge).
     public static readonly EventId PossibleLatePayment = new(2004, nameof(PossibleLatePayment));
 
-    // Payment approved after the reservation was no longer Retained (late charge, #19).
+    // Payment approved after the reservation was no longer Retained (late charge).
     public static readonly EventId LateApprovedPayment = new(2005, nameof(LateApprovedPayment));
 
     // Processing or settlement failed; the broker will redeliver the message.

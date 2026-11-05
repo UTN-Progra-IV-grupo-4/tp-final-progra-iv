@@ -24,10 +24,16 @@ public class ReservationConfiguration : IEntityTypeConfiguration<Reservation>
             .HasColumnName("seat_id")
             .IsRequired();
 
+        // Garantía real contra la doble reserva: la base impide dos reservas activas del mismo asiento,
+        // sin importar cuántas réplicas de Booking compitan. Es un índice único PARCIAL (solo
+        // Retained y Confirmed) porque una reserva Rejected o Expired libera el asiento y no debe
+        // bloquear reservas futuras.
         builder.HasIndex(reservation => new { reservation.EventId, reservation.SeatId })
             .IsUnique()
             .HasFilter("\"status\" IN ('Retained', 'Confirmed')");
 
+        // Acelera la búsqueda de retenciones vencidas; incluye solo las Retained porque son las únicas
+        // que el proceso de expiración necesita encontrar.
         builder.HasIndex(reservation => new { reservation.ExpiresAt, reservation.Id })
             .HasFilter("\"status\" = 'Retained'");
 

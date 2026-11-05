@@ -1,6 +1,5 @@
 namespace Booking.Business.Dtos;
 
-// Define los datos de respuesta.
 public class ReservationStatusResponse
 {
     public required Guid RequestId { get; init; }
