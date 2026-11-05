@@ -92,7 +92,7 @@ public static class DependencyInjection
             });
         }
 
-        // Booking status client (#16). The real HTTP client is used whenever Booking:BaseUrl is
+        // Booking status client. The real HTTP client is used whenever Booking:BaseUrl is
         // configured (bookingOptions is null in Demo mode, which serves demo data and never calls Booking).
         // Without it, the fake only runs in Development; anywhere else the status is reported as
         // unavailable instead of inventing one.

@@ -6,7 +6,11 @@ using Payment.Grpc.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Raíz de composición: es el único lugar que conoce las claves de configuración. Business y Data
+// Payment sigue una arquitectura N-Layer: Grpc -> Business -> Data. Cada capa solo conoce a la de
+// abajo: Grpc expone el contrato y delega en Business, que a su vez usa Data para persistir.
+// Es el servicio que cobra para Booking y solo acepta llamadas gRPC autenticadas del cliente de
+// servicio de Booking.
+// Este archivo es la raíz de composición: es el único lugar que conoce las claves de configuración. Business y Data
 // reciben los valores ya resueltos.
 var paymentConnectionString = builder.Configuration.GetConnectionString("Payment");
 if (string.IsNullOrWhiteSpace(paymentConnectionString))

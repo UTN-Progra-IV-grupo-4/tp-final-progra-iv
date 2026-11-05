@@ -4,7 +4,7 @@ namespace Payment.Business.Gateways;
 
 public enum SimulatedMode { Approve, Decline, Slow, Error }
 
-// Las demoras dependen del deadline gRPC de Booking y de la retención de #17: en configuración
+// Las demoras dependen del deadline gRPC de Booking y de la retención de las reservas de Booking: en configuración
 // se ajustan sin recompilar cuando esos valores cambien.
 // Se lee al arrancar: para cambiar de caso, SimulatedGateway__Mode=Decline y reiniciar solo Payment.
 public class SimulatedGatewayOptions

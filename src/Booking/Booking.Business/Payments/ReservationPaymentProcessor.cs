@@ -22,6 +22,7 @@ public sealed record ReservationPaymentResult(
     string? ChargeId = null,
     bool PaymentOutcomeUnknown = false);
 
+// Cobra una reserva Retenida contra Payment y persiste el resultado con transiciones condicionales.
 public sealed class ReservationPaymentProcessor
 {
     private readonly IReservationRepository repository;
@@ -56,7 +57,12 @@ public sealed class ReservationPaymentProcessor
             throw new ArgumentException("Reservation id is required.", nameof(reservationId));
         }
 
+        // outcomeUnknown: algún intento terminó sin respuesta (Payment no disponible o plazo vencido),
+        // así que el cobro pudo haberse realizado igual. Se arrastra hasta el resultado final para
+        // advertir un posible cobro tardío.
         var outcomeUnknown = false;
+        // Solo se reintentan fallos transitorios (Unavailable, DeadlineExceeded, Pending), hasta
+        // MaxAttempts. Antes de cada intento se revalida que la reserva siga Retenida y sin vencer.
         for (var attempt = 1; attempt <= options.MaxAttempts; attempt++)
         {
             var ineligible = await CheckEligibilityAsync(reservationId, cancellationToken);
@@ -82,12 +88,15 @@ public sealed class ReservationPaymentProcessor
                 PaymentChargeFailure.DeadlineExceeded or
                 PaymentChargeFailure.Pending)
             {
+                // Pending no marca desconocido: Payment respondió que el cobro está en curso.
                 outcomeUnknown |= exception.Failure is
                     PaymentChargeFailure.Unavailable or PaymentChargeFailure.DeadlineExceeded;
                 if (attempt == options.MaxAttempts)
                 {
                     if (exception.Failure == PaymentChargeFailure.Pending)
                     {
+                        // El cobro sigue en curso en Payment: no se rechaza la reserva a ciegas, se
+                        // propaga el fallo para que la capa Api derive el mensaje a revisión manual.
                         throw WithOutcomeUnknown(exception, outcomeUnknown);
                     }
 
@@ -97,6 +106,8 @@ public sealed class ReservationPaymentProcessor
                         return ineligibleAfterFailure with { PaymentOutcomeUnknown = outcomeUnknown };
                     }
 
+                    // Intentos agotados sin respuesta: se rechaza por PaymentUnavailable, pero se
+                    // marca el resultado como desconocido porque podría existir un cobro tardío.
                     var result = await PersistOutcomeAsync(
                         reservationId,
                         ReservationStatus.Rejected,
@@ -220,6 +231,8 @@ public sealed class ReservationPaymentProcessor
             throw new InvalidOperationException("A payment transition did not reach a terminal state.");
         }
 
+        // LateApproved: Payment aprobó el cobro pero la reserva ya no estaba Retenida (venció o fue
+        // rechazada antes), así que el cliente pagó sin quedarse con el asiento.
         var outcome = approvedCharge && current.Status != ReservationStatus.Confirmed
             ? ReservationPaymentOutcome.LateApproved
             : current.Status == ReservationStatus.Expired

@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Availability.Application.ReservationRequests;
 
+// Caso de uso: registra la solicitud de reserva y la publica al broker para que Booking la procese.
+// La solicitud no es una reserva: Booking decide si el asiento se retiene o se rechaza.
 public class ReservationRequestHandler
 {
     private readonly IReservationRequestRepository _repository;
@@ -79,8 +81,11 @@ public class ReservationRequestHandler
         }
         catch (Exception exception)
         {
-            // Without the message Booking never learns about the request, and Availability would
-            // report it as "processing" forever, so the stored row is compensated (removed).
+            // Decisión: compensar en lugar de usar un outbox. Guardar y publicar no son atómicos, así
+            // que si el publish falla puede quedar una solicitud registrada sin publicar; se la borra
+            // para que Availability no la muestre como "en proceso" para siempre, ya que Booking
+            // nunca se enteraría de ella. Un outbox lo evitaría, pero agrega una tabla y un proceso
+            // de reenvío que excede el alcance del proyecto.
             // CancellationToken.None: a cancelled caller must not leave the cleanup half done.
             await _repository.RemoveAsync(reservationRequest, CancellationToken.None);
 

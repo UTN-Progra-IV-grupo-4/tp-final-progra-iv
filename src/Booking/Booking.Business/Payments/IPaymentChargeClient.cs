@@ -1,6 +1,7 @@
 namespace Booking.Business.Payments;
 
-// Booking.Business depends on payment outcomes, not on gRPC messages or status codes.
+// Puerto definido en Business e implementado en Api (GrpcPaymentChargeClient): Business depende de
+// los resultados del cobro, no de mensajes ni códigos de estado gRPC.
 public interface IPaymentChargeClient
 {
     Task<PaymentChargeResult> ChargeAsync(
@@ -24,6 +25,8 @@ public sealed record PaymentChargeResult(
     PaymentChargeOutcome Outcome,
     string? ChargeId);
 
+// Unavailable y DeadlineExceeded dejan el resultado del cobro desconocido (pudo haberse realizado);
+// Pending significa que Payment tiene un cobro en curso para esa reserva. Las tres se reintentan.
 public enum PaymentChargeFailure
 {
     Unavailable,
@@ -40,6 +43,6 @@ public sealed class PaymentChargeException(
 {
     public PaymentChargeFailure Failure { get; } = failure;
 
-    // Set by Business when an earlier attempt ended without a known result, so a charge may exist.
+    // Lo marca Business cuando un intento previo terminó sin resultado conocido, así que puede existir un cobro.
     public bool PaymentOutcomeUnknown { get; init; }
 }

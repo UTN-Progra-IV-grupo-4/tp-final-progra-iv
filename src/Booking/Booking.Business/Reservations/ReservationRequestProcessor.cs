@@ -42,6 +42,10 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
             return validationResult;
         }
 
+        // Idempotencia: el id de la solicitud es el id de la reserva. Si el broker entrega el mismo
+        // mensaje dos veces, el segundo INSERT choca contra la clave primaria y se resuelve como
+        // duplicado en vez de crear otra reserva. La exclusión por asiento la garantiza el índice
+        // único parcial de la base, no una lectura previa que podría quedar obsoleta.
         var retainedReservation = new Reservation
         {
             Id = request.RequestId,
@@ -57,6 +61,8 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
 
         if (insertResult.Outcome == ReservationInsertOutcome.SeatTaken)
         {
+            // El asiento puede estar bloqueado por una retención ya vencida que el proceso periódico
+            // todavía no marcó como Expired. Se la vence acá, de forma condicional, antes de rechazar.
             var expiredReservation = await reservationRepository.TryExpireRetainedReservationForSeatAsync(
                 request.EventId,
                 request.SeatId,
@@ -73,6 +79,8 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
             }
         }
 
+        // RequestIdExists: ya existe una reserva con este id, o sea que el mensaje se reentregó.
+        // SeatTaken: un asiento activo de otra solicitud sigue ocupándolo, se persiste el rechazo.
         return insertResult.Outcome switch
         {
             ReservationInsertOutcome.Created => new ReservationProcessingResult(
@@ -122,6 +130,9 @@ public sealed class ReservationRequestProcessor : IReservationRequestProcessor
         };
     }
 
+    // Un id repetido con el mismo evento y asiento es una reentrega legítima (Duplicate). Con otro
+    // evento o asiento es un id reutilizado para una solicitud distinta (RequestConflict): no se
+    // reintenta, porque reprocesarlo nunca cambiaría el resultado.
     private static ReservationProcessingResult ResolveExistingRequest(
         ProcessReservationRequest request,
         Reservation existingReservation)

@@ -3,6 +3,15 @@ using Booking.Business.Reservations;
 
 namespace Booking.Api.Messaging;
 
+// Traduce el resultado de negocio a una acción sobre el mensaje del broker. Esta política vive en
+// Api porque es parte del adaptador de mensajería: Business no sabe qué es completar ni mandar a
+// dead-letter un mensaje.
+// - Complete: el mensaje ya tiene un resultado definitivo (reserva retenida, duplicada, rechazada,
+//   confirmada o vencida); reprocesarlo no cambiaría nada.
+// - DeadLetter: reentregarlo nunca lo resolvería y requiere revisión manual (mensaje inválido, id de
+//   solicitud con otro contenido, cobro pendiente o inesperado, pago aprobado fuera de plazo).
+// - Reentrega: los fallos transitorios (base caída, excepción inesperada) no llegan acá; el
+//   procesador relanza la excepción, el mensaje queda sin completar y el broker lo reentrega.
 internal static class ReservationRequestSettlementDecider
 {
     private const string InvalidMessageDescription =

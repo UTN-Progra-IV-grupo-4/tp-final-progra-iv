@@ -13,7 +13,6 @@ public class EventsController : ControllerBase
 {
     private readonly OccupiedSeatsService _occupiedSeatsService;
 
-    // Recibe el servicio mediante inyección de dependencias.
     public EventsController(OccupiedSeatsService occupiedSeatsService)
     {
         _occupiedSeatsService = occupiedSeatsService;

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Availability.Web.Controllers;
 
-// MVC flow of #15: seat map -> POST -> redirect -> "request received" screen. It goes through the
+// MVC flow: seat map -> POST -> redirect -> "request received" screen. It goes through the
 // same handler as POST /api/reservations, which keeps its own contract.
 // Both actions are never cached: they carry the id of a request and change with every submission.
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]

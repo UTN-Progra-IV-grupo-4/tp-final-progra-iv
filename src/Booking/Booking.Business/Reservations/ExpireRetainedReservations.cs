@@ -3,6 +3,10 @@ using Microsoft.Extensions.Options;
 
 namespace Booking.Business.Reservations;
 
+// La expiración es un proceso periódico por lotes y no un temporizador por reserva: no depende de
+// memoria del proceso (sobrevive a reinicios) y se acota con el tamaño de lote. Cada transición es
+// un UPDATE condicional (sigue Retained y vencida), así que varias réplicas pueden ejecutarlo a la
+// vez sin expirar dos veces la misma reserva ni pisar una confirmación de pago.
 public sealed class ExpireRetainedReservations : IExpireRetainedReservations
 {
     private readonly IReservationRepository reservationRepository;

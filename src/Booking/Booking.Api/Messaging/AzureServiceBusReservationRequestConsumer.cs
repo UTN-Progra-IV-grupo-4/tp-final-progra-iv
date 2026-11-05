@@ -3,6 +3,10 @@ using Microsoft.Extensions.Options;
 
 namespace Booking.Api.Messaging;
 
+// Adaptador de Azure Service Bus: recibe los mensajes y delega en el procesador. Consume de forma
+// defensiva: AutoCompleteMessages está desactivado, así el mensaje solo se completa o se manda a
+// dead-letter explícitamente tras decidir su resultado; si el procesamiento lanza una excepción,
+// queda sin completar y el broker lo reentrega.
 internal sealed class AzureServiceBusReservationRequestConsumer(
     IOptions<BrokerOptions> brokerOptions,
     ReservationRequestMessageProcessor messageProcessor,
@@ -36,6 +40,7 @@ internal sealed class AzureServiceBusReservationRequestConsumer(
                 options.AzureServiceBus.SubscriptionName,
                 new ServiceBusProcessorOptions
                 {
+                    // El mensaje se completa a mano, solo cuando Booking ya persistió el resultado.
                     AutoCompleteMessages = false
                 });
 
