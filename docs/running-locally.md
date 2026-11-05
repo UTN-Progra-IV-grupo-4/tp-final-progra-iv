@@ -131,7 +131,47 @@ El puerto 5212 no es casual: es el que el realm tiene como URI de redirección d
 4. Caminos de fallo: reservá el mismo asiento con otro usuario (queda Rechazada por asiento ocupado), poné `SimulatedGateway__Mode=Decline` en Payment (pago rechazado) o detené Payment (tres intentos y rechazada por pago no disponible).
 5. Seguir una reserva por los tres servicios: ver `docs/24-logs-de-auditoria.md`.
 
-## 7. Problemas frecuentes
+## 7. Reiniciar el estado entre ensayos
+
+Las reservas confirmadas no se liberan (solo vencen las retenidas), así que después de unos ensayos los asientos se agotan. Estos scripts vacían el estado de las reservas y **conservan el catálogo** (`events` y `seats` de Availability, que carga `demo-data.sql`):
+
+| Base | Script | Qué borra |
+|---|---|---|
+| Availability | `infra/scripts/reset-demo-state/availability.sql` | `reservation_requests` |
+| Booking | `infra/scripts/reset-demo-state/booking.sql` | `reservations` (esto es lo que libera los asientos) |
+| Payment | `infra/scripts/reset-demo-state/payment.sql` | `charges` |
+
+Antes de correrlos:
+
+- **Frená los servicios o asegurate de que estén inactivos** (sin reservas en curso): un mensaje que se esté procesando mientras borrás deja estados inconsistentes. Postgres y Keycloak siguen arriba.
+- **No borran nada del broker.** Los mensajes que ya estén en la suscripción de Azure Service Bus siguen ahí y Booking los consumiría al arrancar, recreando reservas. Verificá que la suscripción esté vacía (mensajes activos y dead-letter en 0) en el portal de Azure, en Service Bus Explorer o en la vista general de la suscripción. Los mensajes de dead-letter son de revisión manual y no se vacían a ciegas: ver `docs/booking/payment-dlq-review.md`.
+- Son solo para la demo: borran todas las filas de esas tablas.
+
+Git Bash (desde la raíz del repositorio, con `.env` completo):
+
+```bash
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$PAYMENT_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$PAYMENT_DB_USER" -d "$PAYMENT_DB_NAME" -v ON_ERROR_STOP=1' < infra/scripts/reset-demo-state/payment.sql
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$BOOKING_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$BOOKING_DB_USER" -d "$BOOKING_DB_NAME" -v ON_ERROR_STOP=1' < infra/scripts/reset-demo-state/booking.sql
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < infra/scripts/reset-demo-state/availability.sql
+```
+
+PowerShell:
+
+```powershell
+Get-Content -Encoding UTF8 infra/scripts/reset-demo-state/payment.sql | docker compose exec -T postgres-db sh -c 'PGPASSWORD="$PAYMENT_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$PAYMENT_DB_USER" -d "$PAYMENT_DB_NAME" -v ON_ERROR_STOP=1'
+Get-Content -Encoding UTF8 infra/scripts/reset-demo-state/booking.sql | docker compose exec -T postgres-db sh -c 'PGPASSWORD="$BOOKING_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$BOOKING_DB_USER" -d "$BOOKING_DB_NAME" -v ON_ERROR_STOP=1'
+Get-Content -Encoding UTF8 infra/scripts/reset-demo-state/availability.sql | docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1'
+```
+
+Cada comando imprime `BEGIN`, `DELETE <n>` y `COMMIT`. Para comprobar que el catálogo sigue y que quedó vacío el resto:
+
+```bash
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -tAc "select (select count(*) from reservation_requests), (select count(*) from events), (select count(*) from seats)"'
+```
+
+Debe devolver `0|2|40`. Después, el mapa de asientos vuelve a mostrar todo libre (recargá la página). Para empezar de cero también con Keycloak y las bases: `docker compose down -v` y repetir desde la sección 3.
+
+## 8. Problemas frecuentes
 
 | Síntoma | Causa y solución |
 |---|---|
