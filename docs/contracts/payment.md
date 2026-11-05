@@ -47,7 +47,7 @@ Un rechazo de negocio viaja en la respuesta. Un error técnico viaja como códig
 | `INVALID_ARGUMENT` | Datos inválidos, moneda no soportada o mismo `reservation_id` con otro monto o moneda | No reintenta. Deriva el mensaje a la DLQ para revisión manual; la reserva queda retenida hasta que vence. |
 | `INTERNAL` | Error interno de Payment que reintentar no arregla (por ejemplo, un modo simulado mal configurado) | No reintenta. Lo trata como respuesta inesperada y lo deriva a revisión manual. |
 | `UNKNOWN` | Excepción no prevista, incluido un error de base no transitorio (credenciales, SQL) | Igual que `INTERNAL`. |
-| `UNAUTHENTICATED` / `PERMISSION_DENIED` | Token inválido o sin el rol necesario | Error de configuración. Fuera del alcance de este PR: lo implementa #11 (ver sección 9). |
+| `UNAUTHENTICATED` / `PERMISSION_DENIED` | Token inválido o sin el rol necesario | Error de configuración. Payment valida el token de `booking-service` (#11, PR #51); no se reintenta y va a revisión manual. |
 
 ## 4. Estados del cobro
 
@@ -186,7 +186,7 @@ sequenceDiagram
 
 | Tema | Estado | Detalle |
 |---|---|---|
-| Autenticación entre servicios | Pendiente en #11 | Payment hoy no valida tokens. #11 agrega client credentials con Keycloak; ahí aparecen `UNAUTHENTICATED` y `PERMISSION_DENIED`. |
+| Autenticación entre servicios | Implementada (#11, PR #51) | Payment valida firma, emisor, audiencia `payment-service` y `azp = booking-service`: sin token válido responde `UNAUTHENTICATED` y con el token de otro cliente, `PERMISSION_DENIED`. |
 | Doble cobro con pasarela real | Limitación conocida | Con una pasarela real, reclamar un `Pending` vencido, o un `Pending` que dejó una actualización fallida tras la aprobación, puede cobrar dos veces. La mitigación sería consultar a la pasarela antes de reclamar. |
 | Modo `Expire` de la pasarela | Descartado | La expiración de la reserva es de Booking (#19 y #20). Se prueba con su reloj controlado, no con una demora de Payment. |
 | RPC de consulta y de reembolso | Descartado en esta etapa | El cotejo y el reembolso son manuales (sección 6). |

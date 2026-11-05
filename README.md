@@ -137,6 +137,18 @@ docker compose down
 7. **Status check** — User polls Availability → Availability queries Booking.
 8. **Expiration** — If a retained reservation reaches its timeout with no result, it expires and the seat is released.
 
+## Diagrams
+
+Architecture diagrams are written in Mermaid under [`docs/diagrams/`](docs/diagrams/README.md):
+
+- [System architecture](docs/diagrams/system.md), including the notification service and where the system is eventually consistent
+- [Availability architecture](docs/diagrams/availability-architecture.md) (Clean Architecture)
+- [Booking architecture](docs/diagrams/booking-architecture.md) (N-Layer)
+- [Payment architecture](docs/diagrams/payment-architecture.md) (N-Layer)
+- [Happy path and failure paths](docs/diagrams/happy-path-and-failure.md) (sequence diagrams for the demo)
+
+Each service contract has its own diagram in `docs/contracts/`: [reservation request](docs/contracts/reservation-request.md), [reservation status](docs/contracts/reservation-status.md), [occupied seats](docs/contracts/occupied-seats.md) and [payment](docs/contracts/payment.md).
+
 ## Getting started
 
 Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
