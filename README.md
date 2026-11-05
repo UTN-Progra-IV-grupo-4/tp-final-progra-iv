@@ -151,7 +151,7 @@ Each service contract has its own diagram in `docs/contracts/`: [reservation req
 
 ## Getting started
 
-Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. Everything lives in a single solution:
+Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. To run the whole system with service authentication, follow [docs/running-locally.md](docs/running-locally.md). Everything lives in a single solution:
 
 ```
 TpFinal.sln
