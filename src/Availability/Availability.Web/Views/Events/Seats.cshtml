@@ -1,0 +1,72 @@
+@using Availability.Application.Events
+@model EventSeatsViewModel
+@{
+    ViewData["Title"] = "Asientos de " + Model.Event.Name;
+}
+
+<a asp-action="Index">Volver a eventos</a>
+<h1 class="mt-3">@Model.Event.Name</h1>
+<p><time datetime="@Model.Event.StartsAt.ToString("O")">@Model.Event.StartsAt.ToString("dd/MM/yyyy HH:mm") UTC</time></p>
+@if (Model.IsDemo)
+{
+    <div class="alert alert-info" role="status">Modo demostración: la disponibilidad es simulada.</div>
+}
+@if (!Model.Event.OccupancyConfirmed)
+{
+    <div class="alert alert-warning" role="status">No podemos confirmar la disponibilidad en este momento. Intentá actualizar más tarde.</div>
+}
+<div asp-validation-summary="All" class="text-danger" role="alert"></div>
+<div class="seat-legend mb-3" aria-label="Referencias del mapa">
+    <span><span class="legend-square legend-available" aria-hidden="true"></span>Libre</span>
+    <span><span class="legend-square legend-occupied" aria-hidden="true"></span>Ocupado</span>
+    <span><span class="legend-square legend-selected" aria-hidden="true"></span>Seleccionado</span>
+</div>
+
+@if (Model.Event.Seats.Count == 0)
+{
+    <p>Todavía no hay asientos cargados para este evento.</p>
+}
+else
+{
+    <form method="get" asp-action="Seats" asp-route-eventId="@Model.Event.Id">
+        <fieldset>
+            <legend class="h5">Elegí un solo asiento</legend>
+            <p class="text-muted" id="seat-help">Los asientos ocupados aparecen en gris y no se pueden seleccionar.</p>
+            <div class="seat-map" aria-describedby="seat-help">
+                <div class="stage" aria-hidden="true">ESCENARIO</div>
+                @foreach (var row in Model.Event.Seats.GroupBy(s => char.IsLetter(s.Number.FirstOrDefault()) ? s.Number[..1] : "Otros").OrderBy(g => g.Key))
+                {
+                    <div class="seat-row" role="group" aria-label="Fila @row.Key">
+                        <span class="row-name" aria-hidden="true">@row.Key</span>
+                        <div class="seat-row-items">
+                            @foreach (var seat in row)
+                            {
+                                var available = seat.Availability == SeatAvailability.Available;
+                                var state = seat.Availability == SeatAvailability.Occupied ? "Ocupado" : available ? "Libre" : "Sin confirmar";
+                                <label class="seat-option">
+                                    <input type="radio" name="selectedSeatId" value="@seat.Id"
+                                           checked="@(Model.SelectedSeatId == seat.Id)" disabled="@(!available)" required />
+                                    <span class="seat-tile @(available ? "seat-available" : "seat-unavailable")">
+                                        <span>@seat.Number</span>
+                                        <span class="visually-hidden"> — @state</span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </fieldset>
+        <div class="d-flex flex-wrap gap-2 mt-4">
+            <button type="submit" class="btn btn-primary" disabled="@(!Model.Event.Seats.Any(s => s.Availability == SeatAvailability.Available))">Elegir asiento</button>
+            <a class="btn btn-outline-secondary" asp-action="Seats" asp-route-eventId="@Model.Event.Id">Actualizar disponibilidad</a>
+        </div>
+    </form>
+}
+@if (Model.SelectedSeat is not null)
+{
+    <div class="alert alert-success mt-4" role="status">
+        Seleccionaste el asiento <strong>@Model.SelectedSeat.Number</strong>. Esta elección todavía no envía una solicitud de reserva.
+    </div>
+}
+<p class="text-muted mt-4">La disponibilidad puede cambiar mientras se procesa una solicitud. Elegir un asiento no lo retiene.</p>
