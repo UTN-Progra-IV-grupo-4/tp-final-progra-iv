@@ -6,6 +6,9 @@ using Microsoft.Extensions.Options;
 
 namespace Booking.Api.Reservations;
 
+// Dispara periódicamente el caso de uso de expiración. Es un proceso por lotes y no un temporizador
+// por reserva: no se pierde si el servicio se reinicia y varias réplicas pueden correrlo a la vez,
+// porque cada transición es un UPDATE condicional en la base (ver ExpireRetainedReservations).
 internal sealed class ExpiredReservationsBackgroundService : BackgroundService
 {
     private readonly IServiceScopeFactory scopeFactory;

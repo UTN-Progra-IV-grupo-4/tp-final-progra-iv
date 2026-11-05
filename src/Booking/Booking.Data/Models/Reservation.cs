@@ -1,5 +1,8 @@
 namespace Booking.Data.Models;
 
+// Modelo anémico a propósito: la reserva solo transporta datos y no tiene métodos de transición.
+// Los cambios de estado son UPDATE condicionales en ReservationRepository, para que sean atómicos
+// aunque haya varias réplicas de Booking.
 public class Reservation
 {
     public Guid Id { get; set; }

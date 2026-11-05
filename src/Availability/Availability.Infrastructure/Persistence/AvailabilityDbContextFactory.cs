@@ -9,7 +9,7 @@ public class AvailabilityDbContextFactory : IDesignTimeDbContextFactory<Availabi
     public AvailabilityDbContext CreateDbContext(string[] args)
     {
         var options = new DbContextOptionsBuilder<AvailabilityDbContext>();
-        // Misma versión que postgres:16 en el compose del equipo (#3).
+        // Misma versión que postgres:16 en el compose del equipo.
         options.UseNpgsql(postgres => postgres.SetPostgresVersion(16, 0));
 
         // Sin conexión se permite generar migraciones y SQL. Para aplicarlas, se requiere

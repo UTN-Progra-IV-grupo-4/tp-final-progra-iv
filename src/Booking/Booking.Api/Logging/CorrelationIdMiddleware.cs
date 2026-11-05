@@ -2,7 +2,7 @@ using Contracts;
 
 namespace Booking.Api.Logging;
 
-// Reads the correlation id that Availability sends on its HTTP calls (ticket #24) and puts it, with the
+// Reads the correlation id that Availability sends on its HTTP calls and puts it, with the
 // service name, in a logging scope so every log line written while the request runs carries it. The id is
 // echoed back in the same header so the caller can check what Booking recorded.
 // It never rejects a request: a missing id is simply not logged, an invalid one is replaced by a marker

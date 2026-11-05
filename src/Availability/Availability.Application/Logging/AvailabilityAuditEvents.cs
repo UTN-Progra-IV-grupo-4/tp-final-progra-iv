@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Availability.Application.Logging;
 
-// Audit events of Availability (ticket #24). The numeric id shows in the console as Category[id] and is
+// Audit events of Availability. The numeric id shows in the console as Category[id] and is
 // stable: filter by it, not by the message text. Ids 1xxx belong to Availability.
 public static class AvailabilityAuditEvents
 {
