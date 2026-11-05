@@ -59,6 +59,12 @@ internal static class BookingMessagingServiceCollectionExtensions
                 .AddServiceBearerToken();
             services.AddScoped<IPaymentChargeClient, GrpcPaymentChargeClient>();
         }
+        else
+        {
+            // Without this, Development fails at startup: the scoped ReservationPaymentProcessor
+            // is always registered and needs an IPaymentChargeClient to be constructible.
+            services.AddScoped<IPaymentChargeClient, DisabledPaymentChargeClient>();
+        }
 
         services.AddSingleton<ReservationRequestMapper>();
         services.AddSingleton<IReservationRequestMessageHandler, ReservationRequestMessageHandler>();

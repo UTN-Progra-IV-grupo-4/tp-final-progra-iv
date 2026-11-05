@@ -19,7 +19,8 @@ public sealed class PaymentOptionsTests
         });
 
         provider.GetRequiredService<IStartupValidator>().Validate();
-        Assert.Null(provider.GetService<IPaymentChargeClient>());
+        // Disabled payment registers the inert client, never the gRPC one.
+        Assert.IsType<DisabledPaymentChargeClient>(provider.GetRequiredService<IPaymentChargeClient>());
     }
 
     [Theory]
@@ -58,7 +59,8 @@ public sealed class PaymentOptionsTests
         using var provider = CreateProvider(settings);
 
         provider.GetRequiredService<IStartupValidator>().Validate();
-        Assert.Null(provider.GetService<IPaymentChargeClient>());
+        // Disabled payment registers the inert client, never the gRPC one.
+        Assert.IsType<DisabledPaymentChargeClient>(provider.GetRequiredService<IPaymentChargeClient>());
     }
 
     private static Dictionary<string, string?> ValidSettings() => new()
