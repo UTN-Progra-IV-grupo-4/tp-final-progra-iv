@@ -150,6 +150,27 @@ public sealed class ReservationStatusControllerTests(PostgreSqlFixture fixture)
         Assert.Contains("const maxMs = 1 * 1000;", body);
     }
 
+    [Fact]
+    public async Task Index_Response_IsNotCacheable()
+    {
+        var bookingStatusClient = new ConfigurableBookingStatusClient { Answer = _ => null };
+        var requestId = await SeedRequestAsync("user-42");
+        using var factory = CreateFactory(bookingStatusClient);
+
+        var response = await GetStatusAsync(factory, requestId, "user-42");
+
+        Assert.True(response.Headers.CacheControl?.NoStore);
+    }
+
+    [Fact]
+    public async Task Index_UnknownStatus_RendersNeutralAlertWithoutPolling()
+    {
+        var body = await GetBodyAsync(requestId => Result(requestId, (ReservationStatus)99));
+
+        Assert.Contains("Estado desconocido", body);
+        Assert.DoesNotContain(PollingMarker, body);
+    }
+
     private async Task<string> GetBodyAsync(Func<Guid, ReservationStatusResult?> answer)
     {
         var bookingStatusClient = new ConfigurableBookingStatusClient { Answer = answer };

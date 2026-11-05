@@ -20,6 +20,8 @@ public class ReservationStatusController : Controller
         _logger = logger;
     }
     [Authorize]
+    // The status changes while the user watches: the browser must never reuse a stored answer.
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     [HttpGet("reservas/{requestId:guid}/estado")]
     public async Task<IActionResult> Index(Guid requestId, CancellationToken cancellationToken)
     {

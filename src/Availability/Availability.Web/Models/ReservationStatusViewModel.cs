@@ -10,4 +10,4 @@ public class ReservationStatusViewModel
     public bool BookingUnavailable { get; set; }
     public int PollIntervalSeconds { get; set; }
     public int PollMaxSeconds { get; set; }
-}   
+}

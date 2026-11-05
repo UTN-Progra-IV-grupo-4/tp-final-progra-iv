@@ -53,6 +53,12 @@
                     La retención del asiento venció.
                 </div>
                 break;
+            default:
+                <div class="alert alert-secondary">
+                    <strong>Estado desconocido</strong><br />
+                    No pudimos interpretar el estado de tu solicitud. Probá de nuevo en unos minutos.
+                </div>
+                break;
         }
     }
     @if (Model.BookingUnavailable || Model.Status is null || Model.Status == ReservationStatus.Retained)
@@ -81,4 +87,4 @@
             })();
         </script>
     }
-</div> 
+</div>
