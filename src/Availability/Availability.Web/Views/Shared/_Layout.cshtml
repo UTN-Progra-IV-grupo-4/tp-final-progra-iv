@@ -38,11 +38,8 @@
                                     @User.Identity.Name
                                 </a>
                                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                    <li><a class="dropdown-item" asp-controller="ReservationStatus" asp-action="Index">Mis Reservas</a></li>
-                                    <li><hr class="dropdown-divider"></li>
                                     <li>
                                         <form asp-controller="Account" asp-action="Logout" method="post">
-                                            @Html.AntiForgeryToken()
                                             <button type="submit" class="dropdown-item">Logout</button>
                                         </form>
                                     </li>
