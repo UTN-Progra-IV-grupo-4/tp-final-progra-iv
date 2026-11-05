@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Booking.Business\Booking.Business.csproj" />
+    <ProjectReference Include="..\..\ServiceAuthentication\ServiceAuthentication.csproj" />
     <ProjectReference Include="..\..\Contracts\Contracts.csproj" />
   </ItemGroup>
 
