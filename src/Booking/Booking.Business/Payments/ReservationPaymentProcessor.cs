@@ -88,7 +88,7 @@ public sealed class ReservationPaymentProcessor
                 {
                     if (exception.Failure == PaymentChargeFailure.Pending)
                     {
-                        throw;
+                        throw WithOutcomeUnknown(exception, outcomeUnknown);
                     }
 
                     var ineligibleAfterFailure = await CheckEligibilityAsync(reservationId, cancellationToken);
@@ -111,10 +111,22 @@ public sealed class ReservationPaymentProcessor
                     await Task.Delay(options.RetryDelay, timeProvider, cancellationToken);
                 }
             }
+            catch (PaymentChargeException exception) when (outcomeUnknown && !exception.PaymentOutcomeUnknown)
+            {
+                // Non-retryable failure after an earlier ambiguous attempt: keep the "possible late charge" signal.
+                throw WithOutcomeUnknown(exception, outcomeUnknown);
+            }
         }
 
         throw new InvalidOperationException("Payment attempts ended without a result.");
     }
+
+    private static PaymentChargeException WithOutcomeUnknown(
+        PaymentChargeException exception,
+        bool outcomeUnknown) =>
+        !outcomeUnknown || exception.PaymentOutcomeUnknown
+            ? exception
+            : new PaymentChargeException(exception.Failure, exception) { PaymentOutcomeUnknown = true };
 
     private async Task<ReservationPaymentResult?> CheckEligibilityAsync(
         Guid reservationId,

@@ -6,6 +6,7 @@ public sealed class FakePaymentChargeClient : IPaymentChargeClient
 {
     private readonly Queue<Func<PaymentChargeRequest, CancellationToken, Task<PaymentChargeResult>>> steps = new();
     private readonly List<PaymentChargeRequest> requests = [];
+    private readonly object gate = new();
 
     public IReadOnlyList<PaymentChargeRequest> Requests => requests;
 
@@ -24,12 +25,18 @@ public sealed class FakePaymentChargeClient : IPaymentChargeClient
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (steps.Count == 0)
+        Func<PaymentChargeRequest, CancellationToken, Task<PaymentChargeResult>> step;
+        lock (gate)
         {
-            throw new InvalidOperationException("No payment charge result was configured for this call.");
+            if (steps.Count == 0)
+            {
+                throw new InvalidOperationException("No payment charge result was configured for this call.");
+            }
+
+            requests.Add(request);
+            step = steps.Dequeue();
         }
 
-        requests.Add(request);
-        return steps.Dequeue()(request, cancellationToken);
+        return step(request, cancellationToken);
     }
 }

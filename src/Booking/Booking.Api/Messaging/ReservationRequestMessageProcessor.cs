@@ -110,6 +110,21 @@ internal sealed class ReservationRequestMessageProcessor(
         }
         else
         {
+            if (handlingResult.PaymentFailureOutcomeUnknown)
+            {
+                logger.LogWarning(
+                    "Possible late payment; payment result unknown after bounded attempts. Service: {Service}; ErrorCode: {ErrorCode}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; PaymentFailure: {PaymentFailure}; SettlementAction: {SettlementAction}; OccurredAtUtc: {OccurredAtUtc}; DeliveryCount: {DeliveryCount}.",
+                    ServiceName,
+                    PaymentOutcomeUnknownErrorCode,
+                    delivery.MessageId,
+                    handlingResult.ProcessingResult!.RequestId,
+                    correlationId,
+                    handlingResult.PaymentFailure,
+                    decision.Action,
+                    DateTimeOffset.UtcNow,
+                    delivery.DeliveryCount);
+            }
+
             if (handlingResult.PaymentResult?.Outcome == ReservationPaymentOutcome.LateApproved)
             {
                 logger.LogWarning(

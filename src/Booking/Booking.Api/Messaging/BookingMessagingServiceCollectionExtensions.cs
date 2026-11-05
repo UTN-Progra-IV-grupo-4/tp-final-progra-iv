@@ -1,5 +1,6 @@
 using Booking.Business.Payments;
 using Booking.Business.Reservations;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Booking.Api.Messaging;
@@ -28,6 +29,11 @@ internal static class BookingMessagingServiceCollectionExtensions
             .Validate(
                 options => options.IsValidFor(retentionDuration),
                 "When Payment:Enabled is true, amount, currency, attempts, deadline and retry delay must be valid, and the maximum call time must fit within half the retention duration.")
+            .Validate<IServiceProviderIsService>(
+                (options, serviceProviderIsService) =>
+                    !options.Enabled ||
+                    serviceProviderIsService.IsService(typeof(IPaymentChargeClient)),
+                "When Payment:Enabled is true, an IPaymentChargeClient must be registered. The gRPC adapter is still pending, so keep Payment:Enabled false until it exists.")
             .ValidateOnStart();
         services.Configure<PaymentConsumerOptions>(configuration.GetSection("Payment"));
 

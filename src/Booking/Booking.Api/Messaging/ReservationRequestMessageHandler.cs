@@ -62,6 +62,7 @@ internal sealed class ReservationRequestMessageHandler(
             return ReservationRequestHandlingResult.Processed(
                 processingResult,
                 paymentFailure: exception.Failure,
+                paymentFailureOutcomeUnknown: exception.PaymentOutcomeUnknown,
                 correlationId: mappingResult.CorrelationId);
         }
     }

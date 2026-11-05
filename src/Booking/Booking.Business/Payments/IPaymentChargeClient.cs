@@ -39,4 +39,7 @@ public sealed class PaymentChargeException(
     : Exception($"Payment charge failed: {failure}.", innerException)
 {
     public PaymentChargeFailure Failure { get; } = failure;
+
+    // Set by Business when an earlier attempt ended without a known result, so a charge may exist.
+    public bool PaymentOutcomeUnknown { get; init; }
 }

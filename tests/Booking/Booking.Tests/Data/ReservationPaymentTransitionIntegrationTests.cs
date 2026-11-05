@@ -1,6 +1,9 @@
+using Booking.Business.Payments;
 using Booking.Data.Models;
 using Booking.Data.Repositories;
+using Booking.Tests.TestDoubles;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Booking.Tests.Data;
 
@@ -141,6 +144,50 @@ public sealed class ReservationPaymentTransitionIntegrationTests(PostgreSqlFixtu
         Assert.NotEqual(confirmed, rejected);
         var stored = await ReadAsync(reservationId);
         Assert.Equal(confirmed ? ReservationStatus.Confirmed : ReservationStatus.Rejected, stored.Status);
+    }
+
+    [Fact]
+    public async Task TwoConcurrentPaymentProcessors_ConfirmOnceAndNeverReportLateApproval()
+    {
+        await fixture.ResetAsync();
+        var reservationId = await SeedAsync(UtcNow.AddMinutes(10));
+        var bothCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        var paymentClient = new FakePaymentChargeClient();
+        for (var consumer = 0; consumer < 2; consumer++)
+        {
+            paymentClient.EnqueueStep(async (_, cancellationToken) =>
+            {
+                if (Interlocked.Increment(ref calls) == 2)
+                {
+                    bothCalled.SetResult();
+                }
+
+                // Both consumers hold an approved charge before either one persists it.
+                await bothCalled.Task.WaitAsync(cancellationToken);
+                return new PaymentChargeResult(PaymentChargeOutcome.Approved, "charge-concurrent");
+            });
+        }
+
+        async Task<ReservationPaymentResult> ConsumeAsync()
+        {
+            await using var context = fixture.CreateDbContext();
+            var processor = new ReservationPaymentProcessor(
+                new ReservationRepository(context),
+                paymentClient,
+                Options.Create(new PaymentProcessingOptions { Enabled = true, AmountCents = 150000 }),
+                new FixedTimeProvider(UtcNow));
+            return await processor.ProcessAsync(
+                reservationId, "correlation-19", new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+        }
+
+        var results = await Task.WhenAll(ConsumeAsync(), ConsumeAsync());
+
+        Assert.Equal(2, paymentClient.Requests.Count);
+        Assert.All(paymentClient.Requests, request => Assert.Equal(reservationId, request.ReservationId));
+        Assert.Single(results, result => result.Outcome == ReservationPaymentOutcome.Confirmed);
+        Assert.Single(results, result => result.Outcome == ReservationPaymentOutcome.AlreadyTerminal);
+        Assert.Equal(ReservationStatus.Confirmed, (await ReadAsync(reservationId)).Status);
     }
 
     private async Task<Guid> SeedAsync(DateTimeOffset expiresAt)

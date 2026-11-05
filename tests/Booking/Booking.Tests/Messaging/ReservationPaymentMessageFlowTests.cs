@@ -164,6 +164,50 @@ public sealed class ReservationPaymentMessageFlowTests
             (await harness.Repository.GetByIdAsync(harness.RequestId))!.Status);
     }
 
+    [Theory]
+    [InlineData(PaymentChargeFailure.Pending, ReservationRequestSettlementErrorCodes.PaymentPending)]
+    [InlineData(PaymentChargeFailure.InvalidRequest, ReservationRequestSettlementErrorCodes.PaymentInvalidRequest)]
+    public async Task ReviewCaseAfterAmbiguousAttempt_DeadLettersAndLogsPossibleLatePayment(
+        PaymentChargeFailure finalFailure,
+        string reason)
+    {
+        await using var harness = new Harness();
+        harness.Repository.EnqueueResult(ReservationInsertResult.Created());
+        harness.Payment.EnqueueFailure(PaymentChargeFailure.Unavailable);
+        harness.Payment.EnqueueFailure(finalFailure);
+        if (finalFailure == PaymentChargeFailure.Pending)
+        {
+            harness.Payment.EnqueueFailure(PaymentChargeFailure.Pending);
+        }
+
+        var settlement = await harness.ProcessAsync();
+
+        Assert.Equal(0, settlement.Completed);
+        Assert.Equal(reason, Assert.Single(settlement.DeadLetters).Reason);
+        Assert.Equal(ReservationStatus.Retained,
+            (await harness.Repository.GetByIdAsync(harness.RequestId))!.Status);
+        Assert.Contains(harness.Logs.Messages, message =>
+            message.Contains("ErrorCode: PaymentOutcomeUnknown", StringComparison.Ordinal) &&
+            message.Contains("SettlementAction: DeadLetter", StringComparison.Ordinal) &&
+            message.Contains(harness.RequestId.ToString(), StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PendingOnly_DeadLettersWithoutPossibleLatePaymentLog()
+    {
+        await using var harness = new Harness();
+        harness.Repository.EnqueueResult(ReservationInsertResult.Created());
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            harness.Payment.EnqueueFailure(PaymentChargeFailure.Pending);
+        }
+
+        await harness.ProcessAsync();
+
+        Assert.DoesNotContain(harness.Logs.Messages, message =>
+            message.Contains("PaymentOutcomeUnknown", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task LateApproval_DeadLettersAndDoesNotConfirm()
     {
