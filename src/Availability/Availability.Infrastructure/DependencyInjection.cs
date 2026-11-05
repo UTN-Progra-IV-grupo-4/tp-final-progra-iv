@@ -1,16 +1,46 @@
 using Availability.Application.Abstractions;
+using Availability.Application.Events;
 using Availability.Infrastructure.Booking;
+using Availability.Infrastructure.Events;
 using Availability.Infrastructure.Messaging;
 using Availability.Infrastructure.Persistence;
 using Availability.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Availability.Infrastructure;
 
 public static class DependencyInjection
 {
+    public static IServiceCollection AddEventQueries(this IServiceCollection services, bool useDemoData,
+        BookingQueryOptions? bookingOptions = null)
+    {
+        services.AddScoped<EventQueryService>();
+        if (useDemoData)
+        {
+            services.AddScoped<IEventCatalog, InMemoryEventCatalog>();
+            services.AddScoped<ISeatOccupancyQuery, DemoSeatOccupancyQuery>();
+        }
+        else
+        {
+            bookingOptions ??= new BookingQueryOptions();
+            var baseAddress = bookingOptions.GetBaseAddress();
+            var timeout = TimeSpan.FromSeconds(bookingOptions.TimeoutSeconds);
+            services.AddScoped<IEventCatalog, EfEventCatalog>();
+            services.TryAddScoped<IBookingServiceTokenProvider, PendingBookingServiceTokenProvider>();
+            services.AddHttpClient<ISeatOccupancyQuery, BookingSeatOccupancyQuery>(client =>
+            {
+                client.BaseAddress = baseAddress;
+                client.Timeout = timeout;
+            })
+            // Un 302 de Booking debe tratarse como respuesta inesperada, no seguirse.
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+        }
+        return services;
+    }
+
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString, string? brokerProvider = null, bool useFakeBookingClient = false)
     {
         services.AddDbContext<AvailabilityDbContext>(options =>
