@@ -1,4 +1,7 @@
+using Booking.Api.Logging;
 using Booking.Business.Payments;
+using Booking.Business.Reservations;
+using Booking.Data.Models;
 
 namespace Booking.Api.Messaging;
 
@@ -6,7 +9,7 @@ internal sealed class ReservationRequestMessageProcessor(
     IReservationRequestMessageHandler handler,
     ILogger<ReservationRequestMessageProcessor> logger)
 {
-    private const string ServiceName = "Booking";
+    private const string ServiceName = BookingAuditEvents.ServiceName;
     private const string PaymentOutcomeUnknownErrorCode = "PaymentOutcomeUnknown";
 
     public async Task ProcessAsync(
@@ -22,7 +25,9 @@ internal sealed class ReservationRequestMessageProcessor(
             : null;
 
         logger.LogInformation(
-            "Reservation message received. MessageId: {MessageId}; CorrelationId: {CorrelationId}; DeliveryCount: {DeliveryCount}.",
+            BookingAuditEvents.ReservationMessageReceived,
+            "Reservation message received. Service: {Service}; MessageId: {MessageId}; CorrelationId: {CorrelationId}; DeliveryCount: {DeliveryCount}.",
+            ServiceName,
             delivery.MessageId,
             safeDeliveryCorrelationId,
             delivery.DeliveryCount);
@@ -35,6 +40,7 @@ internal sealed class ReservationRequestMessageProcessor(
         catch (OperationCanceledException exception) when (cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(
+                BookingAuditEvents.ReservationMessageFailed,
                 "Reservation message processing was cancelled and will be retried. MessageId: {MessageId}; CorrelationId: {CorrelationId}; ExceptionType: {ExceptionType}.",
                 delivery.MessageId,
                 safeDeliveryCorrelationId,
@@ -44,6 +50,7 @@ internal sealed class ReservationRequestMessageProcessor(
         catch (Exception exception)
         {
             logger.LogError(
+                BookingAuditEvents.ReservationMessageFailed,
                 "Reservation message processing failed and will be retried. MessageId: {MessageId}; CorrelationId: {CorrelationId}; DeliveryCount: {DeliveryCount}; ExceptionType: {ExceptionType}.",
                 delivery.MessageId,
                 safeDeliveryCorrelationId,
@@ -72,6 +79,7 @@ internal sealed class ReservationRequestMessageProcessor(
         catch (Exception exception)
         {
             logger.LogError(
+                BookingAuditEvents.ReservationMessageFailed,
                 "Reservation message settlement failed and will be retried. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; Action: {SettlementAction}; ExceptionType: {ExceptionType}.",
                 delivery.MessageId,
                 handlingResult.ProcessingResult?.RequestId,
@@ -86,6 +94,7 @@ internal sealed class ReservationRequestMessageProcessor(
             if (handlingResult.PaymentResult?.PaymentOutcomeUnknown == true)
             {
                 logger.LogWarning(
+                    BookingAuditEvents.PossibleLatePayment,
                     "Possible late payment; payment result unknown after bounded attempts. Service: {Service}; ErrorCode: {ErrorCode}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ChargeId: {ChargeId}; ReservationStatus: {ReservationStatus}; SettlementAction: {SettlementAction}; OccurredAtUtc: {OccurredAtUtc}; DeliveryCount: {DeliveryCount}.",
                     ServiceName,
                     PaymentOutcomeUnknownErrorCode,
@@ -99,20 +108,27 @@ internal sealed class ReservationRequestMessageProcessor(
                     delivery.DeliveryCount);
             }
 
+            // ReservationStatus is the state the reservation ends in; Result is what decided it (the payment
+            // outcome when there was a charge, otherwise the reservation processing outcome). Logging only the
+            // processing outcome made a rejected payment read as "Retained".
             logger.LogInformation(
-                "Reservation message completed. MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; Outcome: {Outcome}; PaymentOutcome: {PaymentOutcome}; ChargeId: {ChargeId}.",
+                BookingAuditEvents.ReservationMessageCompleted,
+                "Reservation message completed. Service: {Service}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ReservationStatus: {ReservationStatus}; Result: {Result}; ChargeId: {ChargeId}; SettlementAction: {SettlementAction}.",
+                ServiceName,
                 delivery.MessageId,
                 handlingResult.ProcessingResult!.RequestId,
                 correlationId,
-                handlingResult.ProcessingResult.Outcome,
-                handlingResult.PaymentResult?.Outcome,
-                handlingResult.PaymentResult?.ChargeId);
+                ResolveFinalStatus(handlingResult),
+                (object?)handlingResult.PaymentResult?.Outcome ?? handlingResult.ProcessingResult.Outcome,
+                handlingResult.PaymentResult?.ChargeId,
+                decision.Action);
         }
         else
         {
             if (handlingResult.PaymentFailureOutcomeUnknown)
             {
                 logger.LogWarning(
+                    BookingAuditEvents.PossibleLatePayment,
                     "Possible late payment; payment result unknown after bounded attempts. Service: {Service}; ErrorCode: {ErrorCode}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; PaymentFailure: {PaymentFailure}; SettlementAction: {SettlementAction}; OccurredAtUtc: {OccurredAtUtc}; DeliveryCount: {DeliveryCount}.",
                     ServiceName,
                     PaymentOutcomeUnknownErrorCode,
@@ -128,6 +144,7 @@ internal sealed class ReservationRequestMessageProcessor(
             if (handlingResult.PaymentResult?.Outcome == ReservationPaymentOutcome.LateApproved)
             {
                 logger.LogWarning(
+                    BookingAuditEvents.LateApprovedPayment,
                     "Late approved payment requires review. Service: {Service}; ErrorCode: {ErrorCode}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ChargeId: {ChargeId}; ReservationStatus: {ReservationStatus}; SettlementAction: {SettlementAction}; OccurredAtUtc: {OccurredAtUtc}; DeliveryCount: {DeliveryCount}.",
                     ServiceName,
                     ReservationRequestSettlementErrorCodes.PaymentApprovedAfterExpiry,
@@ -142,13 +159,26 @@ internal sealed class ReservationRequestMessageProcessor(
             }
 
             logger.LogWarning(
-                "Reservation message moved to dead-letter. Service: {Service}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ChargeId: {ChargeId}; ErrorCode: {ErrorCode}.",
+                BookingAuditEvents.ReservationMessageDeadLettered,
+                "Reservation message moved to dead-letter. Service: {Service}; MessageId: {MessageId}; RequestId: {RequestId}; CorrelationId: {CorrelationId}; ReservationStatus: {ReservationStatus}; ChargeId: {ChargeId}; SettlementAction: {SettlementAction}; ErrorCode: {ErrorCode}.",
                 ServiceName,
                 delivery.MessageId,
                 handlingResult.ProcessingResult?.RequestId,
                 correlationId,
+                ResolveFinalStatus(handlingResult),
                 handlingResult.PaymentResult?.ChargeId,
+                decision.Action,
                 decision.Reason);
         }
     }
+
+    // The state the reservation is in once the message is settled; null when it cannot be known without
+    // reading the database (for example a duplicate delivery with payment disabled).
+    private static ReservationStatus? ResolveFinalStatus(ReservationRequestHandlingResult handlingResult) =>
+        handlingResult.PaymentResult?.CurrentStatus ?? handlingResult.ProcessingResult?.Outcome switch
+        {
+            ReservationProcessingOutcome.Retained => ReservationStatus.Retained,
+            ReservationProcessingOutcome.SeatTaken => ReservationStatus.Rejected,
+            _ => null
+        };
 }

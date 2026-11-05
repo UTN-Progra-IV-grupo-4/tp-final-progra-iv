@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Availability.Application.Logging;
 using Availability.Infrastructure.Messaging;
 using Azure.Messaging.ServiceBus;
 using Contracts;
@@ -77,5 +78,32 @@ public class AzureServiceBusMessagePublisherTests
         await publisher.PublishAsync(message);
 
         Assert.Equal(message.MessageId.ToString(), Assert.Single(sender.Sent).CorrelationId);
+    }
+
+    [Fact]
+    public async Task PublishAsync_LogsThePublishedEventWithTheCorrelationIdAndWithoutTheBody()
+    {
+        var requestId = Guid.Parse("c67cf9a8-cc6f-48c6-9f6c-a5b58b096d32");
+        var logger = new RecordingLogger<AzureServiceBusMessagePublisher>();
+        var publisher = new AzureServiceBusMessagePublisher(
+            new CapturingClient(new CapturingSender()), "reservation-requests", logger);
+        var message = new ReservationRequestMessage
+        {
+            MessageId = requestId,
+            CorrelationId = requestId.ToString(),
+            EventId = Guid.NewGuid(),
+            SeatId = Guid.NewGuid(),
+            UserId = "user-42"
+        };
+
+        await publisher.PublishAsync(message);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(AvailabilityAuditEvents.ReservationRequestPublished, entry.EventId);
+        Assert.Contains("Service: Availability", entry.Message);
+        Assert.Contains($"MessageId: {requestId}", entry.Message);
+        Assert.Contains($"CorrelationId: {requestId}", entry.Message);
+        Assert.DoesNotContain("user-42", entry.Message);
+        Assert.DoesNotContain(message.SeatId.ToString(), entry.Message);
     }
 }

@@ -1,11 +1,14 @@
 using Booking.Api.Payments;
 using Booking.Business.Payments;
+using Booking.Tests.TestDoubles;
 using Contracts.Payment;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Booking.Tests.Payments;
@@ -108,6 +111,48 @@ public sealed class GrpcPaymentChargeClientTests
         Assert.Equal(PaymentChargeFailure.DeadlineExceeded, exception.Failure);
     }
 
+    [Fact]
+    public async Task ChargeAsync_LogsRequestAndAnswerWithCorrelationIdAndWithoutTheAmount()
+    {
+        using var logs = new RecordingLogs();
+        using var harness = new GrpcHarness(
+            (_, _) => Task.FromResult(new ChargeResponse { Status = ChargeStatus.Declined, ChargeId = "charge-24" }),
+            logger: logs.CreateLogger<GrpcPaymentChargeClient>());
+        var reservationId = Guid.NewGuid();
+
+        await harness.Adapter.ChargeAsync(new PaymentChargeRequest(reservationId, 150000, "ARS", "correlation-24"));
+
+        var requested = Assert.Single(logs.Entries, entry => entry.EventId.Id == 2010);
+        var answered = Assert.Single(logs.Entries, entry => entry.EventId.Id == 2011);
+        foreach (var entry in new[] { requested, answered })
+        {
+            Assert.Contains("Service: Booking", entry.Message);
+            Assert.Contains($"RequestId: {reservationId}", entry.Message);
+            Assert.Contains("CorrelationId: correlation-24", entry.Message);
+            Assert.DoesNotContain("150000", entry.Message);
+        }
+
+        Assert.Contains("ChargeId: charge-24", answered.Message);
+        Assert.Contains("PaymentOutcome: Declined", answered.Message);
+    }
+
+    [Fact]
+    public async Task ChargeAsync_WhenPaymentIsUnavailable_LogsTheFailureKindAsErrorCode()
+    {
+        using var logs = new RecordingLogs();
+        using var harness = new GrpcHarness(
+            (_, _) => throw new RpcException(new Status(StatusCode.Unavailable, "down")),
+            logger: logs.CreateLogger<GrpcPaymentChargeClient>());
+
+        await Assert.ThrowsAsync<PaymentChargeException>(() => harness.Adapter.ChargeAsync(
+            new PaymentChargeRequest(Guid.NewGuid(), 150000, "ARS", "correlation-24")));
+
+        var failed = Assert.Single(logs.Entries, entry => entry.EventId.Id == 2012);
+        Assert.Equal(LogLevel.Warning, failed.Level);
+        Assert.Contains("ErrorCode: Unavailable", failed.Message);
+        Assert.Contains("CorrelationId: correlation-24", failed.Message);
+    }
+
     private sealed class GrpcHarness : IDisposable
     {
         private readonly WebApplication app;
@@ -118,7 +163,8 @@ public sealed class GrpcPaymentChargeClientTests
 
         public GrpcHarness(
             Func<ChargeRequest, ServerCallContext, Task<ChargeResponse>> handler,
-            TimeSpan? deadline = null)
+            TimeSpan? deadline = null,
+            ILogger<GrpcPaymentChargeClient>? logger = null)
         {
             var builder = WebApplication.CreateBuilder();
             builder.WebHost.UseTestServer();
@@ -137,7 +183,8 @@ public sealed class GrpcPaymentChargeClientTests
                 Options.Create(new PaymentProcessingOptions
                 {
                     Deadline = deadline ?? TimeSpan.FromSeconds(5)
-                }));
+                }),
+                logger ?? NullLogger<GrpcPaymentChargeClient>.Instance);
         }
 
         public void Dispose()
