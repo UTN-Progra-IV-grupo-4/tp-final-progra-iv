@@ -8,7 +8,6 @@ using Availability.Infrastructure.Persistence.Repositories;
 using Azure.Messaging.ServiceBus;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Availability.Infrastructure;
@@ -27,23 +26,16 @@ public static class DependencyInjection
         else
         {
             bookingOptions ??= new BookingQueryOptions();
-            var baseAddress = bookingOptions.GetBaseAddress();
-            var timeout = TimeSpan.FromSeconds(bookingOptions.TimeoutSeconds);
             services.AddScoped<IEventCatalog, EfEventCatalog>();
-            services.TryAddScoped<IBookingServiceTokenProvider, PendingBookingServiceTokenProvider>();
-            services.AddHttpClient<ISeatOccupancyQuery, BookingSeatOccupancyQuery>(client =>
-            {
-                client.BaseAddress = baseAddress;
-                client.Timeout = timeout;
-            })
-            // Un 302 de Booking debe tratarse como respuesta inesperada, no seguirse.
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
+            // Shared with the status client: base address, timeout, redirects and service token.
+            // The token provider itself (ServiceAuthentication) is registered by the host as a singleton.
+            services.AddBookingHttpClient<ISeatOccupancyQuery, BookingSeatOccupancyQuery>(bookingOptions);
         }
         return services;
     }
 
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString, string? brokerProvider = null, bool useFakeBookingClient = false,
-        AzureServiceBusPublisherOptions? serviceBusOptions = null)
+        AzureServiceBusPublisherOptions? serviceBusOptions = null, BookingQueryOptions? bookingOptions = null)
     {
         services.AddDbContext<AvailabilityDbContext>(options =>
         {
@@ -100,9 +92,15 @@ public static class DependencyInjection
             });
         }
 
-        // The fake only runs in Development; elsewhere the status is reported as unavailable
-        // until the real HTTP client against Booking (#21) is integrated.
-        if (useFakeBookingClient)
+        // Booking status client (#16). The real HTTP client is used whenever Booking:BaseUrl is
+        // configured (bookingOptions is null in Demo mode, which serves demo data and never calls Booking).
+        // Without it, the fake only runs in Development; anywhere else the status is reported as
+        // unavailable instead of inventing one.
+        if (bookingOptions is not null && !string.IsNullOrWhiteSpace(bookingOptions.BaseUrl))
+        {
+            services.AddBookingHttpClient<IBookingStatusClient, BookingStatusClient>(bookingOptions);
+        }
+        else if (useFakeBookingClient)
         {
             services.AddScoped<IBookingStatusClient, FakeBookingStatusClient>();
         }
