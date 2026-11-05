@@ -100,6 +100,29 @@ public sealed class AuditLogTests(PostgreSqlFixture fixture)
     }
 
     [Fact]
+    public async Task LoggingMessagePublisher_LogsIdentifiersOnlyAndNeverTheBody()
+    {
+        var logger = new RecordingLogger<Availability.Infrastructure.Messaging.LoggingMessagePublisher>();
+        var publisher = new Availability.Infrastructure.Messaging.LoggingMessagePublisher(logger);
+        var message = new ReservationRequestMessage
+        {
+            MessageId = RequestId,
+            CorrelationId = RequestId.ToString(),
+            EventId = Guid.NewGuid(),
+            SeatId = Guid.NewGuid(),
+            UserId = "user-42"
+        };
+
+        await publisher.PublishAsync(message);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(AvailabilityAuditEvents.ReservationRequestPublished, entry.EventId);
+        Assert.Contains($"CorrelationId: {RequestId}", entry.Message);
+        Assert.DoesNotContain("user-42", entry.Message);
+        Assert.DoesNotContain(message.SeatId.ToString(), entry.Message);
+    }
+
+    [Fact]
     public async Task StatusClient_SendsTheRequestIdAsCorrelationIdHeader()
     {
         using var handler = JsonHandler(new { requestId = RequestId, status = "Retained", rejectionReason = (string?)null });
