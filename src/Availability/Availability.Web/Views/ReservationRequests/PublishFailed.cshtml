@@ -1,0 +1,11 @@
+@model ReservationPublishFailedViewModel
+@{
+    ViewData["Title"] = "No pudimos enviar tu solicitud";
+}
+<div class="text-center">
+    <h1 class="display-6">No pudimos enviar tu solicitud</h1>
+    <div class="alert alert-danger" role="alert">
+        No pudimos enviar tu solicitud, intentá de nuevo. No se registró ninguna solicitud ni se reservó el asiento.
+    </div>
+    <a class="btn btn-primary" asp-controller="Events" asp-action="Seats" asp-route-eventId="@Model.EventId" asp-route-selectedSeatId="@Model.SeatId">Volver al mapa de asientos</a>
+</div>

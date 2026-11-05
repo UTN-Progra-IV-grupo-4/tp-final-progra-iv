@@ -22,13 +22,16 @@ public sealed class ThrowingMessagePublisher(Exception exception) : IMessagePubl
 
 public static class ReservationSeed
 {
-    public static async Task<(Guid EventId, Guid SeatId)> SeedEventWithSeatAsync(PostgreSqlFixture fixture)
+    public static async Task<(Guid EventId, Guid SeatId)> SeedEventWithSeatAsync(
+        PostgreSqlFixture fixture,
+        string eventName = "Test event",
+        string seatNumber = "A1")
     {
-        var seat = new Seat { Id = Guid.NewGuid(), Number = "A1" };
+        var seat = new Seat { Id = Guid.NewGuid(), Number = seatNumber };
         var seatEvent = new Event
         {
             Id = Guid.NewGuid(),
-            Name = "Test event",
+            Name = eventName,
             StartsAt = DateTimeOffset.UtcNow.AddDays(30),
             Seats = { seat }
         };

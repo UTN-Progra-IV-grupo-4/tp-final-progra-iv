@@ -32,4 +32,13 @@ public class ReservationRequestRepository(AvailabilityDbContext dbContext) : IRe
             request => request.Id == requestId,
             cancellationToken);
     }
+
+    public Task<ReservationRequest?> GetByIdWithSeatAsync(Guid requestId, CancellationToken cancellationToken = default)
+    {
+        return dbContext.ReservationRequests
+            .AsNoTracking()
+            .Include(request => request.Seat)
+            .ThenInclude(seat => seat.Event)
+            .FirstOrDefaultAsync(request => request.Id == requestId, cancellationToken);
+    }
 }
