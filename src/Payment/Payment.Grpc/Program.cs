@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using Payment.Grpc.Authentication;
 using Payment.Business;
 using Payment.Business.Gateways;
 using Payment.Grpc.Services;
@@ -31,10 +32,20 @@ builder.Services.AddOptions<ChargeOptions>()
         "Charge:PendingTimeoutSeconds tiene que ser mayor que SimulatedGateway:SlowDelaySeconds.")
     .ValidateOnStart();
 
+builder.Services.AddServiceAuthentication(builder.Configuration);
 builder.Services.AddGrpc();
 
 var app = builder.Build();
 
-app.MapGrpcService<PaymentGrpcService>();
+app.WarnWhenServiceAuthenticationIsNotConfigured();
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Only booking-service may charge: no token is UNAUTHENTICATED, a token of another client is PERMISSION_DENIED.
+app.MapGrpcService<PaymentGrpcService>().RequireAuthorization(ServiceAuthenticationPolicies.BookingService);
 
 app.Run();
+
+// Exposes the entry point to WebApplicationFactory in tests.
+public partial class Program;
