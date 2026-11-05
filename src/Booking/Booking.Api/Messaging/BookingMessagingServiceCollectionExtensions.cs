@@ -4,6 +4,7 @@ using Booking.Api.Payments;
 using Contracts.Payment;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using ServiceAuthentication;
 
 namespace Booking.Api.Messaging;
 
@@ -51,8 +52,11 @@ internal static class BookingMessagingServiceCollectionExtensions
         {
             // The generated client and its adapter are registered together. An enabled consumer
             // cannot start processing messages without an IPaymentChargeClient.
+            // Payment only accepts the booking-service token (#51), so the client always carries it.
+            services.AddServiceTokenProvider(configuration);
             services.AddGrpcClient<PaymentService.PaymentServiceClient>(options =>
-                options.Address = new Uri(configuration["Payment:Address"]!));
+                    options.Address = new Uri(configuration["Payment:Address"]!))
+                .AddServiceBearerToken();
             services.AddScoped<IPaymentChargeClient, GrpcPaymentChargeClient>();
         }
 

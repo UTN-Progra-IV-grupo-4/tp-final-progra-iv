@@ -2,6 +2,7 @@ using Booking.Business.Payments;
 using Contracts.Payment;
 using Grpc.Core;
 using Microsoft.Extensions.Options;
+using ServiceAuthentication;
 
 namespace Booking.Api.Payments;
 
@@ -43,6 +44,11 @@ internal sealed class GrpcPaymentChargeClient(
             exception.StatusCode == StatusCode.Cancelled && cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException(cancellationToken);
+        }
+        catch (RpcException exception) when (exception.InnerException is ServiceTokenAcquisitionException)
+        {
+            // The service token could not be obtained, so no request reached Payment and no charge exists.
+            throw new PaymentChargeException(PaymentChargeFailure.Unavailable, exception);
         }
         catch (RpcException exception) when (DateTime.UtcNow >= deadline)
         {
