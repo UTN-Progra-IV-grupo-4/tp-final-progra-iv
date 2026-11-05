@@ -1,229 +1,93 @@
-# Autenticación entre microservicios
+# Autenticación entre servicios (#11)
 
-## Configuración implementada
+Cada llamada entre servicios lleva un token de Keycloak obtenido con *client credentials*. Quien recibe valida el token; quien llama lo pide, lo guarda en memoria y lo renueva antes de que venza.
 
-### 1. Paquetes agregados
+| Llamada | Quien llama (cliente Keycloak) | Quien valida | Audiencia | `azp` permitido |
+| --- | --- | --- | --- | --- |
+| Availability a Booking (HTTP) | `availability-service` | Booking (#45) | `booking-service` | `availability-service` |
+| Booking a Payment (gRPC) | `booking-service` | Payment | `payment-service` | `booking-service` |
 
-**Availability.Web:**
-- `Microsoft.AspNetCore.Authentication.JwtBearer` - Para validación de tokens
-- `Microsoft.AspNetCore.Authentication.OpenIdConnect` - Para OIDC (login de usuarios)
+No hay modo simulado: sin Keycloak configurado no se emiten tokens ni se acepta ninguno.
 
-**Booking.Api:**
-- `Microsoft.AspNetCore.Authentication.JwtBearer` - Para validación de tokens
+## Validación entrante
 
-**Payment.Grpc:**
-- `Microsoft.AspNetCore.Authentication.JwtBearer` - Para validación de tokens
+Booking (ver [docs/booking/authentication.md](booking/authentication.md)) y Payment usan el mismo cableado: firma, emisor, audiencia y vencimiento del JWT, más una política que exige `azp == AllowedClientId`. El código vive en `Authentication/` de cada API (`AddServiceAuthentication`).
 
-### 2. Configuración de appsettings.json
+Payment, sección `Authentication`:
 
-**Availability.Web:**
-```json
-{
-  "Keycloak": {
-    "Authority": "http://localhost:8080/realms/seat-reservation",
-    "ClientId": "availability-web",
-    "ServiceClientId": "availability-service",
-    "ServiceClientSecret": ""
-  }
-}
-```
+| Clave | Variable de entorno | Valor por defecto |
+| --- | --- | --- |
+| `Authentication:Authority` | `Authentication__Authority` | vacío (fallo cerrado) |
+| `Authentication:Audience` | `Authentication__Audience` | `payment-service` |
+| `Authentication:AllowedClientId` | `Authentication__AllowedClientId` | `booking-service` |
+| `Authentication:RequireHttpsMetadata` | `Authentication__RequireHttpsMetadata` | `true` |
 
-**Booking.Api:**
-```json
-{
-  "Keycloak": {
-    "Authority": "http://localhost:8080/realms/seat-reservation",
-    "ClientId": "booking-service",
-    "ClientSecret": ""
-  }
-}
-```
+La política se aplica al servicio gRPC (`MapGrpcService<PaymentGrpcService>().RequireAuthorization(...)`):
 
-**Payment.Grpc:**
-```json
-{
-  "Keycloak": {
-    "Authority": "http://localhost:8080/realms/seat-reservation",
-    "Audience": "payment-service"
-  }
-}
-```
+- Sin token, inválido, vencido o con otra audiencia: `UNAUTHENTICATED`.
+- Token válido para Payment pero de otro cliente: `PERMISSION_DENIED`.
+- `Authority` vacío: la aplicación arranca con una advertencia y todo se rechaza con `UNAUTHENTICATED`. Nunca queda abierto.
 
-### 3. Middleware configurado
+## Obtención de tokens (salientes)
 
-**Booking.Api (Program.cs):**
-- JwtBearer authentication configurado para validar tokens
-- Policy "ServiceOnly" creada para endpoints que requieren autenticación de servicio
-- Logs de auditoría en OnTokenValidated, OnAuthenticationFailed, OnChallenge, OnForbidden
+La librería `src/ServiceAuthentication` la usan Availability y Booking. Se registra con `AddServiceTokenProvider(configuration)` y se conecta a un cliente con `.AddServiceBearerToken()`; sirve tanto para `HttpClient` como para clientes gRPC registrados con `AddGrpcClient`, porque ambos pasan por el pipeline de `HttpClient`.
 
-**Payment.Grpc (Program.cs):**
-- JwtBearer authentication configurado para validar tokens
-- Policy "ServiceOnly" con validación de claim "azp" = "booking-service"
-- Logs de auditoría en OnTokenValidated, OnAuthenticationFailed
+Sección `ServiceCredentials` de cada servicio que llama:
 
-**Availability.Web (Program.cs):**
-- OpenID Connect configurado para login de usuarios (Authorization Code + PKCE)
-- Policy "Public" para endpoints públicos (consulta de asientos)
-- Policy "Authenticated" para endpoints que requieren usuario autenticado
-- Logs de auditoría en OnTokenValidated, OnAuthenticationFailed
-- KeycloakTokenService agregado para obtener tokens de servicio
+| Clave | Variable de entorno | Valor por defecto |
+| --- | --- | --- |
+| `ServiceCredentials:Authority` | `ServiceCredentials__Authority` | vacío |
+| `ServiceCredentials:ClientId` | `ServiceCredentials__ClientId` | `availability-service` en Availability, `booking-service` en Booking |
+| `ServiceCredentials:ClientSecret` | `ServiceCredentials__ClientSecret` | vacío, **nunca se versiona** |
+| `ServiceCredentials:RequireHttpsMetadata` | `ServiceCredentials__RequireHttpsMetadata` | `true` |
+| `ServiceCredentials:RefreshSkewSeconds` | `ServiceCredentials__RefreshSkewSeconds` | `30` |
+| `ServiceCredentials:RequestTimeoutSeconds` | `ServiceCredentials__RequestTimeoutSeconds` | `10` |
 
-### 4. Cómo aplicar autorización cuando se agreguen endpoints
-
-#### Booking.Api - Controller REST
-
-Cuando se agreguen controllers, aplicar autorización así:
-
-```csharp
-[ApiController]
-[Route("api/[controller]")]
-public class ReservationsController : ControllerBase
-{
-    // Endpoint público (sin autorización)
-    [HttpGet("public-info")]
-    public IActionResult GetPublicInfo()
-    {
-        return Ok("Public info");
-    }
-
-    // Endpoint que requiere token de usuario o servicio
-    [Authorize]
-    [HttpGet("{id}")]
-    public IActionResult GetById(Guid id)
-    {
-        return Ok($"Reservation {id}");
-    }
-
-    // Endpoint que solo permite servicio
-    [Authorize(Policy = "ServiceOnly")]
-    [HttpPost("internal")]
-    public IActionResult InternalOperation()
-    {
-        return Ok("Internal operation");
-    }
-}
-```
-
-#### Payment.Grpc - Servicio gRPC
-
-Cuando se agreguen servicios gRPC, aplicar autorización así:
-
-```csharp
-// En Program.cs:
-app.MapGrpcService<PaymentService>()
-    .RequireAuthorization("ServiceOnly");
-
-// O en el servicio:
-public class PaymentService : Payment.PaymentBase
-{
-    public override Task<PaymentResponse> ProcessPayment(
-        PaymentRequest request,
-        ServerCallContext context)
-    {
-        // El token ya fue validado por el middleware
-        var clientId = context.GetHttpContext().User.FindFirst("azp")?.Value;
-        Console.WriteLine($"[AUDIT] Payment requested by: {clientId}");
-
-        // Lógica de procesamiento
-        return Task.FromResult(new PaymentResponse { Success = true });
-    }
-}
-```
-
-#### Availability.Web - Controller MVC
-
-```csharp
-public class ReservationController : Controller
-{
-    // Endpoint público (consulta de asientos)
-    [AllowAnonymous]
-    public IActionResult Index()
-    {
-        return View();
-    }
-
-    // Endpoint que requiere usuario autenticado
-    [Authorize(Policy = "Authenticated")]
-    [HttpPost]
-    public IActionResult Create(ReservationRequest request)
-    {
-        // Obtener token de servicio para llamar a Booking
-        var tokenService = HttpContext.RequestServices.GetRequiredService<KeycloakTokenService>();
-        var serviceToken = await tokenService.GetServiceTokenAsync();
-
-        // Llamar a Booking con el token de servicio
-        // ...
-
-        return Ok();
-    }
-}
-```
-
-### 5. Variables de entorno
-
-Configurar en `.env`:
-
-```bash
-KEYCLOAK_AVAILABILITY_CLIENT_SECRET=<secret-de-availability-service>
-KEYCLOAK_BOOKING_CLIENT_SECRET=<secret-de-booking-service>
-KEYCLOAK_PAYMENT_CLIENT_SECRET=<secret-de-payment-service>
-```
-
-O en User Secrets para desarrollo local:
+El secreto es el mismo valor que `KEYCLOAK_AVAILABILITY_CLIENT_SECRET` o `KEYCLOAK_BOOKING_CLIENT_SECRET` del `.env` con el que se importa el realm. En desarrollo:
 
 ```bash
 cd src/Availability/Availability.Web
-dotnet user-secrets set "Keycloak:ServiceClientSecret" "availability-secret-dev"
+dotnet user-secrets set "ServiceCredentials:ClientSecret" "<KEYCLOAK_AVAILABILITY_CLIENT_SECRET>"
 
-cd src/Booking/Booking.Api
-dotnet user-secrets set "Keycloak:ClientSecret" "booking-secret-dev"
+cd ../../Booking/Booking.Api
+dotnet user-secrets set "ServiceCredentials:ClientSecret" "<KEYCLOAK_BOOKING_CLIENT_SECRET>"
 ```
 
-### 6. Pruebas
+`appsettings.Development.json` apunta a `http://localhost:8080/realms/seat-reservation` con `RequireHttpsMetadata` en `false`. Fuera de desarrollo la `Authority` debe ser HTTPS: el secreto viaja en el pedido de token y el proveedor se niega a enviarlo por HTTP.
 
-Cuando se agreguen endpoints, probar así:
+Comportamiento:
 
-#### Sin token (debe dar 401):
+- El token se guarda en memoria y se reutiliza hasta `RefreshSkewSeconds` antes de vencer (como máximo la mitad de su vida). Con llamadas concurrentes hay un único pedido a Keycloak.
+- Si falta configuración o Keycloak falla, se lanza `ServiceTokenAcquisitionException` (hereda de `HttpRequestException`) y la llamada saliente no se envía; nunca se envía sin token ni con un token de usuario.
+- No se registran secretos ni tokens: los logs solo traen el cliente y el código HTTP.
+
+### Uso desde Availability
+
+`IBookingServiceTokenProvider` (#47) debe devolver el `access_token` de `availability-service`. Con esta librería la implementación es un adaptador de una línea sobre `IServiceTokenProvider.GetAccessTokenAsync(cancellationToken)`, que ya devuelve el token sin prefijo `Bearer`.
+
+### Uso desde Booking
+
+Cuando exista el cliente gRPC de Payment (#24):
+
+```csharp
+builder.Services
+    .AddGrpcClient<PaymentService.PaymentServiceClient>(options => options.Address = paymentAddress)
+    .AddServiceBearerToken();
+```
+
+## Comprobación manual contra Keycloak
+
 ```bash
-curl http://localhost:5001/api/reservations/123
+TOKEN=$(curl -s -X POST http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=booking-service \
+  -d client_secret=<KEYCLOAK_BOOKING_CLIENT_SECRET> | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+
+grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{}' \
+  localhost:5088 payment.PaymentService/Charge
 ```
 
-#### Con token de servicio:
-```bash
-# Obtener token
-TOKEN=$(curl -X POST http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials" \
-  -d "client_id=booking-service" \
-  -d "client_secret=<secret>" | jq -r '.access_token')
+Resultado esperado: con el token de `booking-service` el pedido llega al servicio (`INVALID_ARGUMENT` por el cuerpo vacío); sin token o con el de `availability-service` o `payment-service`, `UNAUTHENTICATED`.
 
-# Usar token
-curl http://localhost:5001/api/reservations/123 \
-  -H "Authorization: Bearer $TOKEN"
-```
+## Fuera de alcance
 
-#### gRPC con token:
-```bash
-grpcurl -plaintext \
-  -H "Authorization: Bearer $TOKEN" \
-  localhost:5003 \
-  payment.Payment/ProcessPayment
-```
-
-### 7. Criterios de aceptación
-
-- ✅ Paquetes de autenticación agregados
-- ✅ Middleware configurado en los tres servicios
-- ✅ Políticas de autorización definidas
-- ✅ Logs de auditoría implementados
-- ✅ KeycloakTokenService creado para Availability
-- ⏳ Llamadas sin token son rechazadas con 401 (pendiente de implementar endpoints)
-- ⏳ Llamadas Availability → Booking llevan token de servicio (pendiente de implementar)
-- ⏳ Llamadas gRPC Booking → Payment llevan token de servicio (pendiente de implementar)
-- ⏳ Cada API valida tokens y scopes (pendiente de implementar endpoints)
-
-### 8. Referencias
-
-- Issue #10 - Configurar el servidor de autorización
-- Issue #11 - Autenticación entre servicios
-- infra/keycloak/README.md - Documentación de Keycloak
+El inicio de sesión de usuarios con OpenID Connect en Availability es el #14. El esquema por defecto de Availability sigue siendo la cookie (responde 401/403 en vez de redirigir).
