@@ -68,7 +68,10 @@
                 const intervalMs = @(Model.PollIntervalSeconds) * 1000;
                 const maxMs = @(Model.PollMaxSeconds) * 1000;
                 const url = new URL(window.location.href);
-                const startedAt = Number(url.searchParams.get("desde")) || Date.now();
+                // "desde" only resumes the count after a reload: values that are not positive or that lie
+                // in the future restart it, so it cannot be used to extend the limit.
+                const raw = Number(url.searchParams.get("desde"));
+                const startedAt = raw > 0 && raw <= Date.now() ? raw : Date.now();
                 if (Date.now() - startedAt >= maxMs) {
                     document.getElementById("poll-timeout").classList.remove("d-none");
                     return;

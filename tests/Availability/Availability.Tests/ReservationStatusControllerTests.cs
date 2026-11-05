@@ -122,6 +122,14 @@ public sealed class ReservationStatusControllerTests(PostgreSqlFixture fixture)
         Assert.DoesNotContain(PollingMarker, body);
     }
 
+    [Fact]
+    public async Task Index_Polling_IgnoresAStartTimeInTheFutureOrNotPositive()
+    {
+        var body = await GetBodyAsync(_ => null);
+
+        Assert.Contains("const startedAt = raw > 0 && raw <= Date.now() ? raw : Date.now();", body);
+    }
+
     private async Task<string> GetBodyAsync(Func<Guid, ReservationStatusResult?> answer)
     {
         var bookingStatusClient = new ConfigurableBookingStatusClient { Answer = answer };
