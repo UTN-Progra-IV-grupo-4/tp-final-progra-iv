@@ -25,4 +25,11 @@ public class ReservationRequestRepository(AvailabilityDbContext dbContext) : IRe
         dbContext.ReservationRequests.Remove(reservationRequest);
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public Task<ReservationRequest?> GetByIdAsync(Guid requestId, CancellationToken cancellationToken = default)
+    {
+        return dbContext.ReservationRequests.FirstOrDefaultAsync(
+            request => request.Id == requestId,
+            cancellationToken);
+    }
 }

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Capa de negocio (N-Layer): casos de uso y reglas. La usa Payment.Grpc y solo depende de Payment.Data. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Explícitos aunque ya lleguen por EF Core desde Data: Business los usa directamente y no debe
+         romperse si Data cambia de ORM. Solo las interfaces: la implementación la elige el arranque. -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.14" />
+  </ItemGroup>
+
+  <!-- Sin Contracts: la traducción a Protobuf es de la presentación; Business recibe y devuelve tipos propios. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Payment.Data\Payment.Data.csproj" />
+  </ItemGroup>
+
+</Project>

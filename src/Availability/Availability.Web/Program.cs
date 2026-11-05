@@ -11,7 +11,8 @@ builder.Services.AddControllersWithViews();
 // Web conecta las implementaciones del catálogo y del envío de solicitudes.
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Availability"),
-    builder.Configuration["Broker:Provider"]);
+    builder.Configuration["Broker:Provider"],
+    useFakeBookingClient: builder.Environment.IsDevelopment());
 builder.Services.AddScoped<ReservationRequestHandler>();
 var querySource = builder.Configuration["EventQueries:Source"] ?? "Database";
 if (querySource != "Demo" && querySource != "Database")
@@ -26,6 +27,7 @@ if (useDemoData && !builder.Environment.IsDevelopment())
 var bookingOptions = builder.Configuration.GetSection("Booking").Get<BookingQueryOptions>() ?? new BookingQueryOptions();
 builder.Services.AddEventQueries(useDemoData, bookingOptions);
 builder.Services.AddSingleton(new EventDisplayOptions(useDemoData));
+builder.Services.AddScoped<ReservationStatusHandler>();
 
 // Cookie scheme as the default so [Authorize] challenges instead of throwing a 500.
 // #14 (OIDC login) will plug the OpenID Connect challenge on top of this cookie scheme.
