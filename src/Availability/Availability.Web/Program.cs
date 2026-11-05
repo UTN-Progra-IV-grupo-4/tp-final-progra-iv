@@ -34,6 +34,7 @@ builder.Services.AddInfrastructure(
     // Demo mode never calls Booking, so the real status client is not offered there.
     bookingOptions: useDemoData ? null : bookingOptions);
 builder.Services.AddScoped<ReservationRequestHandler>();
+builder.Services.AddScoped<ReservationReceiptHandler>();
 builder.Services.AddEventQueries(useDemoData, bookingOptions);
 builder.Services.AddSingleton(new EventDisplayOptions(useDemoData));
 builder.Services.AddScoped<ReservationStatusHandler>();

@@ -45,6 +45,7 @@ public class EventsController(EventQueryService queries, EventDisplayOptions dis
             }
         }
 
+        // El envío de la solicitud es un POST aparte (ReservationRequestsController).
         // GET solo confirma una elección en pantalla. El envío de la reserva pertenece al #15.
         return View(new EventSeatsViewModel(eventData, displayOptions.IsDemo, confirmedSeatId));
     }
