@@ -1,4 +1,5 @@
 @using Availability.Application.Events
+@using Availability.Web.Controllers
 @model EventSeatsViewModel
 @{
     ViewData["Title"] = "Asientos de " + Model.Event.Name;
@@ -16,6 +17,10 @@
     <div class="alert alert-warning" role="status">No podemos confirmar la disponibilidad en este momento. Intentá actualizar más tarde.</div>
 }
 <div asp-validation-summary="All" class="text-danger" role="alert"></div>
+@if (TempData[ReservationRequestsController.ErrorTempDataKey] is string reservationError)
+{
+    <div class="alert alert-danger" role="alert">@reservationError</div>
+}
 <div class="seat-legend mb-3" aria-label="Referencias del mapa">
     <span><span class="legend-square legend-available" aria-hidden="true"></span>Libre</span>
     <span><span class="legend-square legend-occupied" aria-hidden="true"></span>Ocupado</span>
@@ -66,7 +71,15 @@ else
 @if (Model.SelectedSeat is not null)
 {
     <div class="alert alert-success mt-4" role="status">
-        Seleccionaste el asiento <strong>@Model.SelectedSeat.Number</strong>. Esta elección todavía no envía una solicitud de reserva.
+        Seleccionaste el asiento <strong>@Model.SelectedSeat.Number</strong>. Todavía no enviaste ninguna solicitud.
     </div>
+    <form method="post" asp-controller="ReservationRequests" asp-action="Create" asp-route-eventId="@Model.Event.Id">
+        <input type="hidden" name="seatId" value="@Model.SelectedSeat.Id" />
+        <button type="submit" class="btn btn-success">Reservar este asiento</button>
+        @if (User.Identity?.IsAuthenticated != true)
+        {
+            <span class="text-muted ms-2">Vas a tener que iniciar sesión para enviar la solicitud.</span>
+        }
+    </form>
 }
 <p class="text-muted mt-4">La disponibilidad puede cambiar mientras se procesa una solicitud. Elegir un asiento no lo retiene.</p>

@@ -17,7 +17,8 @@ namespace Availability.Tests;
 public sealed class ReservationStatusWebFactory(
     string connectionString,
     ConfigurableBookingStatusClient bookingStatusClient,
-    IReadOnlyDictionary<string, string>? settings = null) : WebApplicationFactory<Program>
+    IReadOnlyDictionary<string, string>? settings = null,
+    IMessagePublisher? messagePublisher = null) : WebApplicationFactory<Program>
 {
     public const string UserHeader = "X-Test-User";
 
@@ -33,6 +34,13 @@ public sealed class ReservationStatusWebFactory(
         {
             services.RemoveAll<IBookingStatusClient>();
             services.AddSingleton<IBookingStatusClient>(bookingStatusClient);
+
+            if (messagePublisher is not null)
+            {
+                // The broker is replaced by a capturing (or failing) publisher.
+                services.RemoveAll<IMessagePublisher>();
+                services.AddSingleton(messagePublisher);
+            }
 
             // Only the authenticate scheme changes: challenges still go through the real cookie
             // scheme, so an anonymous request is answered exactly as in production.

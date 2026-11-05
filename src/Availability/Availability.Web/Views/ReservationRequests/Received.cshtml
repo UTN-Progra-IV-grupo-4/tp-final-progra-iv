@@ -1,0 +1,23 @@
+@model ReservationReceivedViewModel
+@{
+    ViewData["Title"] = "Solicitud recibida";
+}
+<div class="text-center">
+    <h1 class="display-6">Solicitud recibida</h1>
+    <div class="alert alert-info" role="status">
+        <strong>Recibimos tu solicitud y la estamos procesando.</strong><br />
+        Todavía no es una reserva confirmada: el resultado se conoce cuando termine el procesamiento.
+    </div>
+    <dl class="row justify-content-center text-start mx-auto" style="max-width: 32rem;">
+        <dt class="col-sm-4">Número de solicitud</dt>
+        <dd class="col-sm-8"><code>@Model.Receipt.RequestId</code></dd>
+        <dt class="col-sm-4">Evento</dt>
+        <dd class="col-sm-8">@Model.Receipt.EventName</dd>
+        <dt class="col-sm-4">Fecha del evento</dt>
+        <dd class="col-sm-8"><time datetime="@Model.Receipt.EventStartsAt.ToString("O")">@Model.Receipt.EventStartsAt.ToString("dd/MM/yyyy HH:mm") UTC</time></dd>
+        <dt class="col-sm-4">Asiento</dt>
+        <dd class="col-sm-8">@Model.Receipt.SeatNumber</dd>
+    </dl>
+    <p>Guardá el número de solicitud para consultar su estado.</p>
+    <a class="btn btn-primary" asp-controller="ReservationStatus" asp-action="Index" asp-route-requestId="@Model.Receipt.RequestId">Ver el estado de mi solicitud</a>
+</div>
