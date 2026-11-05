@@ -18,6 +18,13 @@ public interface IReservationRepository
         Reservation reservation,
         CancellationToken cancellationToken = default);
 
+    Task<bool> TrySetPaymentOutcomeAsync(
+        Guid reservationId,
+        ReservationStatus status,
+        ReservationRejectionReason? rejectionReason,
+        DateTimeOffset utcNow,
+        CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<Reservation>> GetExpiredReservationsAsync(
         DateTimeOffset now,
         int batchSize,

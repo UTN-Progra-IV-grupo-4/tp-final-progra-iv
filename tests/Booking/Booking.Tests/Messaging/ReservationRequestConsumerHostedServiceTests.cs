@@ -27,7 +27,8 @@ public sealed class ReservationRequestConsumerHostedServiceTests
         await using var serviceProvider = services.BuildServiceProvider();
         var handler = new ReservationRequestMessageHandler(
             serviceProvider.GetRequiredService<IServiceScopeFactory>(),
-            new ReservationRequestMapper());
+            new ReservationRequestMapper(),
+            Options.Create(new PaymentConsumerOptions()));
         var messageProcessor = new ReservationRequestMessageProcessor(
             handler,
             NullLogger<ReservationRequestMessageProcessor>.Instance);

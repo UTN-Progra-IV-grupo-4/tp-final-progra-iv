@@ -1,3 +1,4 @@
+using Booking.Business.Payments;
 using Booking.Business.Services;
 using Booking.Business.Reservations;
 using Booking.Data;
@@ -12,7 +13,9 @@ public static class BookingBusinessServiceCollectionExtensions
     {
         services.AddBookingData(connectionString);
         services.AddOptions<ReservationProcessingOptions>();
+        services.AddOptions<PaymentProcessingOptions>();
         services.AddScoped<IReservationRequestProcessor, ReservationRequestProcessor>();
+        services.AddScoped<ReservationPaymentProcessor>();
         services.AddScoped<IExpireRetainedReservations, ExpireRetainedReservations>();
         services.TryAddSingleton(TimeProvider.System);
 
