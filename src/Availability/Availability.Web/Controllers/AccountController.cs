@@ -1,3 +1,4 @@
+using Availability.Web.Authentication;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -10,19 +11,20 @@ namespace Availability.Web.Controllers;
 [Route("Account")]
 public class AccountController : Controller
 {
-    private readonly IConfiguration _configuration;
+    private readonly IAuthenticationSchemeProvider _schemeProvider;
     private readonly ILogger<AccountController> _logger;
 
-    public AccountController(IConfiguration configuration, ILogger<AccountController> logger)
+    public AccountController(IAuthenticationSchemeProvider schemeProvider, ILogger<AccountController> logger)
     {
-        _configuration = configuration;
+        _schemeProvider = schemeProvider;
         _logger = logger;
     }
 
     [HttpGet("Login")]
-    public IActionResult Login(string? returnUrl = null)
+    public async Task<IActionResult> Login(string? returnUrl = null)
     {
-        ViewData["ReturnUrl"] = returnUrl;
+        ViewData["ReturnUrl"] = SafeReturnUrl(returnUrl);
+        ViewData["IsDevelopmentLogin"] = await IsDevelopmentLoginAsync();
         return View();
     }
 
@@ -30,65 +32,65 @@ public class AccountController : Controller
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> LoginPost(string? returnUrl = null)
     {
-        // Check if using development authentication
-        var useDevelopmentAuth = _configuration.GetValue<bool>("DevelopmentAuthentication:Enabled", false)
-            && HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment();
+        var safeReturnUrl = SafeReturnUrl(returnUrl);
 
-        if (useDevelopmentAuth)
+        if (await IsDevelopmentLoginAsync())
         {
-            // Development mode: authenticate with the development handler
-            var result = await HttpContext.AuthenticateAsync("Development");
-            if (result.Succeeded)
+            // Development mode: the fixed user comes from configuration, never from the request.
+            var result = await HttpContext.AuthenticateAsync(DevelopmentAuthenticationHandler.SchemeName);
+            if (!result.Succeeded || result.Principal is null)
             {
-                await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, result.Principal);
-                _logger.LogInformation("User logged in with development authentication");
-                return LocalRedirect(returnUrl ?? "/");
+                return Forbid();
             }
+
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, result.Principal);
+            _logger.LogInformation("User logged in with development authentication");
+            return LocalRedirect(safeReturnUrl);
         }
 
-        // Production mode: initiate OpenID Connect flow
+        // Production mode: initiate OpenID Connect flow.
         return Challenge(new AuthenticationProperties
         {
-            RedirectUri = Url.Action(nameof(LoginCallback), new { returnUrl })
+            RedirectUri = Url.Action(nameof(LoginCallback), new { returnUrl = safeReturnUrl })
         }, OpenIdConnectDefaults.AuthenticationScheme);
     }
 
     [HttpGet("LoginCallback")]
     public async Task<IActionResult> LoginCallback(string? returnUrl = null)
     {
-        // OpenID Connect callback
+        var safeReturnUrl = SafeReturnUrl(returnUrl);
+
+        // OpenID Connect callback: the OIDC handler already signed the user into the cookie scheme.
         var result = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-        if (result?.Succeeded == true)
+        if (result.Succeeded)
         {
             _logger.LogInformation("User logged in with OpenID Connect");
-            return LocalRedirect(returnUrl ?? "/");
+            return LocalRedirect(safeReturnUrl);
         }
 
-        return RedirectToAction(nameof(Login), new { returnUrl });
+        return RedirectToAction(nameof(Login), new { returnUrl = safeReturnUrl });
     }
 
     [HttpPost("Logout")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Logout()
     {
-        var useDevelopmentAuth = _configuration.GetValue<bool>("DevelopmentAuthentication:Enabled", false)
-            && HttpContext.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment();
-
-        if (useDevelopmentAuth)
+        if (await IsDevelopmentLoginAsync())
         {
-            // Development mode: just sign out the cookie
+            // Development mode: just sign out the cookie.
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             _logger.LogInformation("User logged out (development mode)");
-        }
-        else
-        {
-            // Production mode: sign out of OpenID Connect
-            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            await HttpContext.SignOutAsync(OpenIdConnectDefaults.AuthenticationScheme);
-            _logger.LogInformation("User logged out (OpenID Connect)");
+            return RedirectToAction("Index", "Home");
         }
 
-        return RedirectToAction("Index", "Home");
+        // Production mode: returning SignOut (instead of calling SignOutAsync and then redirecting)
+        // lets the OpenID Connect handler redirect to Keycloak's end-session endpoint, which ends
+        // the Keycloak session too. Keycloak then returns to /signout-callback-oidc -> RedirectUri.
+        _logger.LogInformation("User logged out (OpenID Connect)");
+        return SignOut(
+            new AuthenticationProperties { RedirectUri = Url.Action("Index", "Home") ?? "/" },
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            OpenIdConnectDefaults.AuthenticationScheme);
     }
 
     [HttpGet("AccessDenied")]
@@ -96,4 +98,13 @@ public class AccountController : Controller
     {
         return View();
     }
+
+    // Development login is available only when Program.cs registered the scheme, which requires
+    // the Development environment and DevelopmentAuthentication:Enabled.
+    private async Task<bool> IsDevelopmentLoginAsync() =>
+        await _schemeProvider.GetSchemeAsync(DevelopmentAuthenticationHandler.SchemeName) is not null;
+
+    // Only local URLs are accepted, so the login cannot be used as an open redirect.
+    private string SafeReturnUrl(string? returnUrl) =>
+        !string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl) ? returnUrl : "/";
 }

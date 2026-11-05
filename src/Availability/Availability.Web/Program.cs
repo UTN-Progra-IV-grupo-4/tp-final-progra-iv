@@ -37,24 +37,32 @@ builder.Services.AddSingleton(new EventDisplayOptions(useDemoData));
 builder.Services.AddScoped<ReservationStatusHandler>();
 
 // Authentication configuration
-var useDevelopmentAuth = builder.Configuration.GetValue<bool>("DevelopmentAuthentication:Enabled", false)
-    && builder.Environment.IsDevelopment();
+var useDevelopmentAuth = builder.Configuration.GetValue<bool>("DevelopmentAuthentication:Enabled", false);
+if (useDevelopmentAuth && !builder.Environment.IsDevelopment())
+{
+    // A fixed-user login must never exist outside Development, even if the flag leaks into
+    // appsettings.json or an environment variable: refuse to start instead of ignoring it.
+    throw new InvalidOperationException("DevelopmentAuthentication:Enabled solo está permitido en Development.");
+}
 
 // Cookie scheme as the default so [Authorize] challenges instead of throwing a 500.
+// OpenID Connect is only invoked explicitly by AccountController for the MVC login.
 var authenticationBuilder = builder.Services
     .AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
+        options.LoginPath = "/Account/Login";
+        options.AccessDeniedPath = "/Account/AccessDenied";
+
         // The API must answer 401/403 instead of redirecting to a login page.
         options.Events.OnRedirectToLogin = context =>
         {
-            // For API endpoints, return 401. For MVC pages, redirect to login.
             if (context.Request.Path.StartsWithSegments("/api"))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 return Task.CompletedTask;
             }
-            context.Response.Redirect("/Account/Login?ReturnUrl=" + Uri.EscapeDataString(context.Request.Path));
+            context.Response.Redirect(context.RedirectUri);
             return Task.CompletedTask;
         };
         options.Events.OnRedirectToAccessDenied = context =>
@@ -64,20 +72,20 @@ var authenticationBuilder = builder.Services
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return Task.CompletedTask;
             }
-            context.Response.Redirect("/Account/AccessDenied");
+            context.Response.Redirect(context.RedirectUri);
             return Task.CompletedTask;
         };
     });
 
 if (useDevelopmentAuth)
 {
-    // Development mode: use fixed user authentication
-    authenticationBuilder.AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>("Development", options => { });
-    Console.WriteLine("[AUTH] Using DEVELOPMENT authentication (fixed user)");
+    // Development mode: fixed user, only registered when explicitly enabled in Development.
+    authenticationBuilder.AddScheme<AuthenticationSchemeOptions, DevelopmentAuthenticationHandler>(
+        DevelopmentAuthenticationHandler.SchemeName, options => { });
 }
 else
 {
-    // Production mode: use OpenID Connect with Keycloak
+    // Production mode: OpenID Connect with Keycloak (public client, authorization code + PKCE).
     var keycloakAuthority = builder.Configuration["Keycloak:Authority"]
         ?? Environment.GetEnvironmentVariable("KEYCLOAK_ISSUER")
         ?? "http://localhost:8080/realms/seat-reservation";
@@ -91,8 +99,11 @@ else
         options.ClientId = keycloakClientId;
         options.ResponseType = "code";
         options.UsePkce = true;
+        // The id_token is needed as id_token_hint so that logout ends the Keycloak session.
         options.SaveTokens = true;
-        options.RequireHttpsMetadata = false;
+        // Plain HTTP metadata is only acceptable against the local Keycloak of the dev compose;
+        // outside Development it needs an explicit Keycloak:RequireHttpsMetadata=false.
+        options.RequireHttpsMetadata = builder.Configuration.GetValue("Keycloak:RequireHttpsMetadata", !builder.Environment.IsDevelopment());
         options.GetClaimsFromUserInfoEndpoint = true;
 
         options.TokenValidationParameters = new TokenValidationParameters
@@ -110,21 +121,17 @@ else
 
         options.Events = new OpenIdConnectEvents
         {
-            OnTokenValidated = context =>
-            {
-                var userId = context.Principal?.FindFirst("sub")?.Value;
-                Console.WriteLine($"[AUTH] User authenticated: {userId}");
-                return Task.CompletedTask;
-            },
             OnAuthenticationFailed = context =>
             {
-                Console.WriteLine($"[AUTH ERROR] {context.Exception.Message}");
+                // Only the exception type: messages can echo parts of the response.
+                context.HttpContext.RequestServices
+                    .GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Availability.Web.Authentication")
+                    .LogWarning("OpenID Connect authentication failed: {ExceptionType}", context.Exception.GetType().Name);
                 return Task.CompletedTask;
             }
         };
     });
-
-    Console.WriteLine($"[AUTH] Using OPENID CONNECT with Keycloak: {keycloakAuthority}");
 }
 
 // Outgoing: availability-service token (client credentials) for the calls to Booking.

@@ -1,6 +1,7 @@
 @{
     ViewData["Title"] = "Login";
     var returnUrl = ViewData["ReturnUrl"] as string;
+    var isDevelopmentLogin = ViewData["IsDevelopmentLogin"] as bool? == true;
 }
 
 <div class="row justify-content-center">
@@ -11,8 +12,7 @@
             </div>
             <div class="card-body">
                 <p class="text-center mb-4">
-                    @if (Context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() &&
-                         Context.RequestServices.GetRequiredService<IConfiguration>().GetValue<bool>("DevelopmentAuthentication:Enabled", false))
+                    @if (isDevelopmentLogin)
                     {
                         <text>
                             <strong>Modo Desarrollo:</strong> Estás usando autenticación de desarrollo con un usuario fijo.
@@ -27,11 +27,9 @@
                 </p>
 
                 <form method="post" asp-action="LoginPost" asp-route-returnUrl="@returnUrl">
-                    @Html.AntiForgeryToken()
                     <div class="d-grid">
                         <button type="submit" class="btn btn-primary btn-lg">
-                            @if (Context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() &&
-                                 Context.RequestServices.GetRequiredService<IConfiguration>().GetValue<bool>("DevelopmentAuthentication:Enabled", false))
+                            @if (isDevelopmentLogin)
                             {
                                 <text>Login (Development)</text>
                             }
