@@ -209,6 +209,31 @@ public sealed class ReservationPaymentMessageFlowTests
     }
 
     [Fact]
+    public async Task PendingAfterUnavailable_DeadLettersAndRecordsUnknownPriorOutcome()
+    {
+        await using var harness = new Harness();
+        harness.Repository.EnqueueResult(ReservationInsertResult.Created());
+        harness.Payment.EnqueueFailure(PaymentChargeFailure.Unavailable);
+        harness.Payment.EnqueueFailure(PaymentChargeFailure.Pending);
+        harness.Payment.EnqueueFailure(PaymentChargeFailure.Pending);
+
+        var settlement = await harness.ProcessAsync();
+
+        Assert.Equal(0, settlement.Completed);
+        Assert.Equal(ReservationRequestSettlementErrorCodes.PaymentPending,
+            Assert.Single(settlement.DeadLetters).Reason);
+        Assert.Equal(ReservationStatus.Retained,
+            (await harness.Repository.GetByIdAsync(harness.RequestId))!.Status);
+        Assert.Contains(harness.Logs.Messages, message =>
+            message.Contains("ErrorCode: PaymentOutcomeUnknown", StringComparison.Ordinal) &&
+            message.Contains("SettlementAction: DeadLetter", StringComparison.Ordinal) &&
+            message.Contains(harness.RequestId.ToString(), StringComparison.Ordinal) &&
+            message.Contains("correlation-19", StringComparison.Ordinal));
+        Assert.DoesNotContain(harness.Logs.Messages, message =>
+            message.Contains("secret-user-payload", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task LateApproval_DeadLettersAndDoesNotConfirm()
     {
         await using var harness = new Harness();
