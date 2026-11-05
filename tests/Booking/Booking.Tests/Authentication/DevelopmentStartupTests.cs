@@ -35,16 +35,16 @@ public class DevelopmentStartupTests
     }
 
     [Fact]
-    public void Startup_InDevelopmentWithPaymentDisabled_NeverChargesThroughTheDisabledClient()
+    public async Task Startup_InDevelopmentWithPaymentDisabled_NeverChargesThroughTheDisabledClient()
     {
         using var factory = CreateDevelopmentFactory(paymentEnabled: false);
         using var scope = factory.Services.CreateScope();
 
         var chargeClient = scope.ServiceProvider.GetRequiredService<IPaymentChargeClient>();
 
-        var exception = Assert.ThrowsAsync<InvalidOperationException>(() => chargeClient.ChargeAsync(
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => chargeClient.ChargeAsync(
             new PaymentChargeRequest(Guid.NewGuid(), 150000, "ARS", "correlation"), CancellationToken.None));
-        Assert.Contains("Payment:Enabled", exception.Result.Message);
+        Assert.Contains("Payment:Enabled", exception.Message);
     }
 
     [Fact]
