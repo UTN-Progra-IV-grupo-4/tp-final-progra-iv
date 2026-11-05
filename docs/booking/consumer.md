@@ -40,7 +40,7 @@ The consumer also handles the gap before the next job run: if an insert conflict
 
 ## Message handling
 
-Booking deserializes the shared `Contracts.ReservationRequestMessage` from #15. Its camelCase JSON body contains `messageId`, `correlationId`, `eventId`, `seatId`, `userId`, and `requestedAt`. The broker `MessageId` must equal the body's `messageId`, and the body `correlationId` must be nonempty. Booking maps `messageId` to `RequestId`; `UserId` and `RequestedAt` are deserialized but do not affect reservation processing.
+Booking deserializes the shared `Contracts.ReservationRequestMessage` from #15. Its camelCase JSON body contains `messageId`, `correlationId`, `eventId`, `seatId`, `userId`, and `requestedAt`. The broker `MessageId` must equal the body's `messageId`, and the body `correlationId` must be nonempty, use ASCII letters, digits, `-`, `_` or `.`, and be at most 64 characters long. Booking maps `messageId` to `RequestId`; `UserId` and `RequestedAt` are deserialized but do not affect reservation processing.
 
 The consumer uses manual settlement (`AutoCompleteMessages = false`):
 

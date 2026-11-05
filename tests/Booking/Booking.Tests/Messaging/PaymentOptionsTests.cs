@@ -1,6 +1,6 @@
 using Booking.Api.Messaging;
+using Booking.Api.Payments;
 using Booking.Business.Payments;
-using Booking.Tests.TestDoubles;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -19,6 +19,7 @@ public sealed class PaymentOptionsTests
         });
 
         provider.GetRequiredService<IStartupValidator>().Validate();
+        Assert.Null(provider.GetService<IPaymentChargeClient>());
     }
 
     [Theory]
@@ -28,11 +29,13 @@ public sealed class PaymentOptionsTests
     [InlineData("Payment:RetryDelay", "-00:00:01")]
     [InlineData("Payment:Deadline", "00:00:00")]
     [InlineData("Payment:Deadline", "00:02:00")]
+    [InlineData("Payment:Address", "")]
+    [InlineData("Payment:Address", "ftp://localhost")]
     public void EnabledPayment_WithInvalidOptions_FailsAtStartup(string key, string value)
     {
         var settings = ValidSettings();
         settings[key] = value;
-        using var provider = CreateProvider(settings, registerClient: true);
+        using var provider = CreateProvider(settings);
 
         Assert.Throws<OptionsValidationException>(() =>
             provider.GetRequiredService<IStartupValidator>().Validate());
@@ -41,19 +44,10 @@ public sealed class PaymentOptionsTests
     [Fact]
     public void EnabledPayment_WithBoundedRetries_PassesStartupValidation()
     {
-        using var provider = CreateProvider(ValidSettings(), registerClient: true);
-
-        provider.GetRequiredService<IStartupValidator>().Validate();
-    }
-
-    [Fact]
-    public void EnabledPayment_WithoutRegisteredClient_FailsAtStartup()
-    {
         using var provider = CreateProvider(ValidSettings());
 
-        var exception = Assert.Throws<OptionsValidationException>(() =>
-            provider.GetRequiredService<IStartupValidator>().Validate());
-        Assert.Contains("IPaymentChargeClient", exception.Message, StringComparison.Ordinal);
+        provider.GetRequiredService<IStartupValidator>().Validate();
+        Assert.IsType<GrpcPaymentChargeClient>(provider.GetRequiredService<IPaymentChargeClient>());
     }
 
     [Fact]
@@ -64,11 +58,13 @@ public sealed class PaymentOptionsTests
         using var provider = CreateProvider(settings);
 
         provider.GetRequiredService<IStartupValidator>().Validate();
+        Assert.Null(provider.GetService<IPaymentChargeClient>());
     }
 
     private static Dictionary<string, string?> ValidSettings() => new()
     {
         ["Payment:Enabled"] = "true",
+        ["Payment:Address"] = "http://localhost:5183",
         ["Payment:AmountCents"] = "150000",
         ["Payment:Currency"] = "ARS",
         ["Payment:MaxAttempts"] = "3",
@@ -77,20 +73,13 @@ public sealed class PaymentOptionsTests
         ["ReservationProcessing:RetentionDuration"] = "00:10:00"
     };
 
-    private static ServiceProvider CreateProvider(
-        IDictionary<string, string?> values,
-        bool registerClient = false)
+    private static ServiceProvider CreateProvider(IDictionary<string, string?> values)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(values)
             .Build();
         var services = new ServiceCollection();
         services.AddLogging();
-        if (registerClient)
-        {
-            services.AddSingleton<IPaymentChargeClient, FakePaymentChargeClient>();
-        }
-
         services.AddBookingMessaging(configuration);
         return services.BuildServiceProvider();
     }
