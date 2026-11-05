@@ -50,9 +50,9 @@ Después del camino feliz, abrir [diagrams/happy-path-and-failure.md](diagrams/h
 
 ## Ruido esperado en las consolas
 
-- Availability imprime el SQL de cada consulta (`Executed DbCommand`), también en cada consulta de estado: puede tapar los eventos 1001/1002. Filtrá por el número de solicitud.
+- Availability ya no imprime el SQL de cada consulta (`Microsoft.EntityFrameworkCore.Database.Command` en `Warning`). Si necesitás verlo para depurar, subí ese nivel a `Information` con `Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Information`.
 - Una advertencia `Failed to determine the https port for redirect` en Availability y Booking, en el primer pedido (corren solo por HTTP).
-- Con Payment caído, los stack traces de `SocketException` en Booking (ver arriba).
+- Con Payment caído, Booking ya no imprime los stack traces de `SocketException` (`Grpc.Net.Client` en `Critical`). Siguen los eventos de auditoría (2011/2012) y la advertencia de posible cobro tardío (2004), que es esperada.
 
 ## Limitaciones (decirlas en voz alta)
 
