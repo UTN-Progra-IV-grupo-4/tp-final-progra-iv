@@ -3,8 +3,8 @@ using ServiceAuthentication;
 
 namespace Availability.Infrastructure.Booking;
 
-// Single place that wires every HTTP client of Availability towards Booking (seat occupancy, #13,
-// and reservation status, #16): same base address, timeout, redirect policy and service token.
+// Single place that wires every HTTP client of Availability towards Booking (seat occupancy and
+// reservation status): same base address, timeout, redirect policy and service token.
 internal static class BookingHttpClientRegistration
 {
     public static IHttpClientBuilder AddBookingHttpClient<TService, TImplementation>(

@@ -12,7 +12,14 @@ using ServiceAuthentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Availability sigue Clean Architecture: Domain <- Application <- Infrastructure / Web. Las
+// dependencias apuntan siempre hacia adentro: Domain no conoce a nadie, Application define los
+// puertos (interfaces) e Infrastructure los implementa. Web referencia Infrastructure solo porque
+// este archivo es la raíz de composición: es el único lugar que conecta cada puerto con su
+// implementación concreta. El dominio es anémico a propósito: las entidades solo transportan datos
+// y las reglas viven en los casos de uso de Application.
+// Es un microservicio con su propia base de datos: publica las solicitudes de reserva al broker y
+// consulta a Booking por HTTP con un token de servicio, sin acceder jamás a la base de Booking.
 builder.Services.AddControllersWithViews();
 var querySource = builder.Configuration["EventQueries:Source"] ?? "Database";
 if (querySource != "Demo" && querySource != "Database")
@@ -143,7 +150,6 @@ builder.Services.AddServiceTokenProvider(builder.Configuration);
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");

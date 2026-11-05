@@ -8,7 +8,7 @@ using ServiceAuthentication;
 
 namespace Availability.Infrastructure.Booking;
 
-// Implementa únicamente el contrato HTTP del #21. Booking decide cuáles reservas ocupan.
+// Implementa únicamente el contrato HTTP de ocupación de asientos de Booking. Booking decide cuáles reservas ocupan.
 public class BookingSeatOccupancyQuery(
     HttpClient httpClient,
     ILogger<BookingSeatOccupancyQuery> logger) : ISeatOccupancyQuery
@@ -29,7 +29,7 @@ public class BookingSeatOccupancyQuery(
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/events/{eventId:D}/occupied-seats");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            // No x-correlation-id on purpose (#24): the public seat map is not part of any reservation, so
+            // No x-correlation-id on purpose: the public seat map is not part of any reservation, so
             // there is no chain to follow, and a random id per page view would only add noise to the logs.
             using var response = await httpClient.SendAsync(request, timeout.Token);
             if (response.StatusCode != HttpStatusCode.OK)

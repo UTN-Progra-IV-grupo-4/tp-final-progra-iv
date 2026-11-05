@@ -1,5 +1,6 @@
 namespace Availability.Domain.Entities;
 
+// Dominio anémico: el asiento solo describe datos. Si está libre u ocupado lo decide Booking.
 public class Seat
 {
     public Guid Id { get; set; }

@@ -32,7 +32,7 @@ public class ReservationStatusController : Controller
         {
             return Unauthorized();
         }
-        // Polling policy agreed in #16: every 3 s for up to 2 min, configurable (at least 1 s, so a
+        // Polling policy: every 3 s for up to 2 min, configurable (at least 1 s, so a
         // bad value cannot turn the page into a busy loop).
         var model = new ReservationStatusViewModel
         {

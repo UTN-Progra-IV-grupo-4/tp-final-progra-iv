@@ -17,7 +17,7 @@ public class LoggingMessagePublisher : IMessagePublisher
 
     public Task PublishAsync<T>(T message, CancellationToken cancellationToken = default)
     {
-        // Identifiers only (ticket #24): the body carries the user id and must not reach the logs.
+        // Identifiers only: the body carries the user id and must not reach the logs.
         if (message is ReservationRequestMessage reservationRequest)
         {
             _logger.LogInformation(
