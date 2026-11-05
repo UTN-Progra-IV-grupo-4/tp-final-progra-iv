@@ -1,6 +1,6 @@
 namespace Contracts;
 
-// Single definition of how the correlation id travels between services (ticket #24): the HTTP header
+// Single definition of how the correlation id travels between services: the HTTP header
 // and gRPC metadata name, and the rule every receiver applies before putting the value in a log.
 public static class CorrelationIdPolicy
 {

@@ -15,7 +15,7 @@ public class ChargeOptions
 
     public TimeSpan PendingTimeout => TimeSpan.FromSeconds(PendingTimeoutSeconds);
 
-    // Monedas aceptadas (#22: solo ARS), en appsettings.json. Sin valor inicial a propósito: el binder
+    // Monedas aceptadas (hoy solo ARS), en appsettings.json. Sin valor inicial a propósito: el binder
     // de configuración agrega a la colección existente en vez de reemplazarla, así que un ["ARS"] acá
     // más un ["USD"] configurado terminaría aceptando las dos. MinLength frena el arranque si falta.
     [MinLength(1)]

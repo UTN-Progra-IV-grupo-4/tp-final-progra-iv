@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Payment.Business;
 
-// Audit events of the charge chain (ticket #24). The numeric id shows in the console as Category[id]
+// Audit events of the charge chain. The numeric id shows in the console as Category[id]
 // and is stable: filter by it, not by the message text. Ids 3xxx belong to Payment.
 public static class PaymentAuditEvents
 {
