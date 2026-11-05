@@ -88,13 +88,13 @@ Persistence/Scripts/demo-data.sql contiene el catálogo confirmado de dos evento
 Desde Git Bash:
 
 ```bash
-docker exec -i postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < src/Availability/Availability.Infrastructure/Persistence/Scripts/demo-data.sql
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < src/Availability/Availability.Infrastructure/Persistence/Scripts/demo-data.sql
 ```
 
 Para inspeccionar datos:
 
 ```bash
-docker exec -it postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME"'
+docker compose exec postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME"'
 ```
 
 Dentro de psql, `\dt` lista las tablas; `SELECT * FROM events;` y `SELECT * FROM seats;` muestran los ejemplos. `\q` permite salir. Si Git Bash informa que la terminal no es TTY, anteponer winpty al comando interactivo.
@@ -118,7 +118,7 @@ Se comprueban las migraciones sobre una base vacía, el renombrado conservando d
 El script sigue disponible para una comprobación manual después de migrar:
 
 ```bash
-docker exec -i postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < tests/Availability/Availability.Tests/constraints.sql
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < tests/Availability/Availability.Tests/constraints.sql
 ```
 
 ## Alcance

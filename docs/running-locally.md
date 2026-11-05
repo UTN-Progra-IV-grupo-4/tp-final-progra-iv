@@ -62,11 +62,21 @@ dotnet ef database update --project src/Booking/Booking.Data --startup-project s
 dotnet ef database update --project src/Payment/Payment.Data --startup-project src/Payment/Payment.Grpc
 ```
 
-Cargá el catálogo de demo de Availability (2 eventos y 20 asientos por evento; se puede repetir sin duplicar):
+Cargá el catálogo de demo de Availability (2 eventos y 20 asientos por evento; se puede repetir sin duplicar). El comando corre `psql` dentro del servicio `postgres-db` de Compose, así que no depende del nombre del contenedor; ejecutalo desde la raíz del repositorio, con `.env` completo.
+
+Git Bash o cualquier shell POSIX:
 
 ```bash
-docker exec -i postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < src/Availability/Availability.Infrastructure/Persistence/Scripts/demo-data.sql
+docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1' < src/Availability/Availability.Infrastructure/Persistence/Scripts/demo-data.sql
 ```
+
+PowerShell (no soporta `<`; hay que pasar el archivo por la tubería y con `-Encoding UTF8`, o los acentos de los nombres se guardan rotos):
+
+```powershell
+Get-Content -Encoding UTF8 src/Availability/Availability.Infrastructure/Persistence/Scripts/demo-data.sql | docker compose exec -T postgres-db sh -c 'PGPASSWORD="$AVAILABILITY_DB_PASSWORD" exec psql -h 127.0.0.1 -U "$AVAILABILITY_DB_USER" -d "$AVAILABILITY_DB_NAME" -v ON_ERROR_STOP=1'
+```
+
+Debe imprimir `INSERT 0 2` y `INSERT 0 40` la primera vez, y `INSERT 0 0` dos veces las siguientes.
 
 ## 5. Los tres servicios
 
