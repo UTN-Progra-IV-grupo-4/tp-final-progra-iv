@@ -6,6 +6,7 @@ using Availability.Infrastructure.Messaging;
 using Availability.Infrastructure.Persistence;
 using Availability.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
@@ -67,7 +68,18 @@ public static class DependencyInjection
                 return new RabbitMqMessagePublisher(provider.GetRequiredService<ILogger<RabbitMqMessagePublisher>>());
             }
 
-            // Temporary placeholder until the real broker implementation is introduced in a dedicated PR.
+            if (string.Equals(brokerProvider, "AzureServiceBus", StringComparison.OrdinalIgnoreCase))
+            {
+                var configuration = provider.GetService<IConfiguration>();
+                var connectionString = configuration?["Broker:AzureServiceBus:ConnectionString"];
+                var topicName = configuration?["Broker:AzureServiceBus:TopicName"] ?? "reservation-requests";
+
+                return new AzureServiceBusMessagePublisher(
+                    connectionString,
+                    topicName,
+                    provider.GetRequiredService<ILogger<AzureServiceBusMessagePublisher>>());
+            }
+
             return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
         });
 
