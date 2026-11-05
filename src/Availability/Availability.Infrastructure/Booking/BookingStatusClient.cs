@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Availability.Application.Abstractions;
+using Contracts;
 using Microsoft.Extensions.Logging;
 using ServiceAuthentication;
 
@@ -31,6 +32,8 @@ public sealed class BookingStatusClient(
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/reservations/{requestId:D}/status");
             request.Headers.Accept.ParseAdd("application/json");
+            // The request id is the correlation id of the whole chain (#24): Booking logs it with this call.
+            request.Headers.Add(CorrelationIdPolicy.HeaderName, requestId.ToString("D"));
             using var response = await httpClient.SendAsync(request, timeout.Token);
 
             return response.StatusCode switch

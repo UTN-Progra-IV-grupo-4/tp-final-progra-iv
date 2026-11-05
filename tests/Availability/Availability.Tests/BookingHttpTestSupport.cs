@@ -24,11 +24,15 @@ internal sealed class BookingResponseHandler(
     public Uri? RequestUri { get; private set; }
     public string? Authorization { get; private set; }
 
+    // Values of x-correlation-id on the last request (empty when the header was not sent).
+    public string[] CorrelationIds { get; private set; } = [];
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Calls++;
         RequestUri = request.RequestUri;
         Authorization = request.Headers.Authorization?.ToString();
+        CorrelationIds = request.Headers.TryGetValues("x-correlation-id", out var values) ? values.ToArray() : [];
         return respond(request, cancellationToken);
     }
 }

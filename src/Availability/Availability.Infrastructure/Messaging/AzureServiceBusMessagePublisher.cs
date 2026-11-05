@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Availability.Application.Abstractions;
+using Availability.Application.Logging;
 using Azure.Messaging.ServiceBus;
 using Contracts;
 using Microsoft.Extensions.Logging;
@@ -53,9 +54,13 @@ public sealed class AzureServiceBusMessagePublisher : IMessagePublisher
 
         await _sender.SendMessageAsync(serviceBusMessage, cancellationToken);
 
+        // The body is never logged. CorrelationId is what Booking and Payment log for the same request.
         _logger.LogInformation(
-            "Azure Service Bus message published to topic {TopicName}. MessageId: {MessageId}.",
+            AvailabilityAuditEvents.ReservationRequestPublished,
+            "Azure Service Bus message published to topic {TopicName}. Service: {Service}; MessageId: {MessageId}; CorrelationId: {CorrelationId}.",
             _topicName,
-            serviceBusMessage.MessageId);
+            AvailabilityAuditEvents.ServiceName,
+            serviceBusMessage.MessageId,
+            serviceBusMessage.CorrelationId);
     }
 }
