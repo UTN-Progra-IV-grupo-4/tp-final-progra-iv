@@ -9,4 +9,8 @@
     <ProjectReference Include="..\Availability.Domain\Availability.Domain.csproj" />
     <ProjectReference Include="..\..\Contracts\Contracts.csproj" />
   </ItemGroup>
+  <!-- Solo las abstracciones: los casos de uso registran eventos de auditoría (#24) sin conocer el proveedor. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.14" />
+  </ItemGroup>
 </Project>

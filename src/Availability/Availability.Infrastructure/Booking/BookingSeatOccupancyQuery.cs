@@ -29,6 +29,8 @@ public class BookingSeatOccupancyQuery(
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/events/{eventId:D}/occupied-seats");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            // No x-correlation-id on purpose (#24): the public seat map is not part of any reservation, so
+            // there is no chain to follow, and a random id per page view would only add noise to the logs.
             using var response = await httpClient.SendAsync(request, timeout.Token);
             if (response.StatusCode != HttpStatusCode.OK)
             {
