@@ -5,6 +5,7 @@ using Availability.Infrastructure.Events;
 using Availability.Infrastructure.Messaging;
 using Availability.Infrastructure.Persistence;
 using Availability.Infrastructure.Persistence.Repositories;
+using Azure.Messaging.ServiceBus;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -41,7 +42,8 @@ public static class DependencyInjection
         return services;
     }
 
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString, string? brokerProvider = null, bool useFakeBookingClient = false)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, string? connectionString, string? brokerProvider = null, bool useFakeBookingClient = false,
+        AzureServiceBusPublisherOptions? serviceBusOptions = null)
     {
         services.AddDbContext<AvailabilityDbContext>(options =>
         {
@@ -60,16 +62,43 @@ public static class DependencyInjection
 
         services.AddScoped<IReservationRequestRepository, ReservationRequestRepository>();
 
-        services.AddScoped<IMessagePublisher>(provider =>
+        var useAzureServiceBus = string.Equals(brokerProvider, "AzureServiceBus", StringComparison.OrdinalIgnoreCase)
+            && serviceBusOptions is { Enabled: true };
+        if (useAzureServiceBus)
         {
-            if (string.Equals(brokerProvider, "RabbitMq", StringComparison.OrdinalIgnoreCase))
+            // Fail at startup instead of on the first reservation request.
+            if (string.IsNullOrWhiteSpace(serviceBusOptions!.ConnectionString))
             {
-                return new RabbitMqMessagePublisher(provider.GetRequiredService<ILogger<RabbitMqMessagePublisher>>());
+                throw new InvalidOperationException(
+                    "Broker:AzureServiceBus:ConnectionString is required when Broker:AzureServiceBus:Enabled is true.");
             }
 
-            // Temporary placeholder until the real broker implementation is introduced in a dedicated PR.
-            return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
-        });
+            if (string.IsNullOrWhiteSpace(serviceBusOptions.TopicName))
+            {
+                throw new InvalidOperationException(
+                    "Broker:AzureServiceBus:TopicName is required when Broker:AzureServiceBus:Enabled is true.");
+            }
+
+            // One client (one AMQP connection) for the whole process; the container disposes it.
+            services.AddSingleton(_ => new ServiceBusClient(serviceBusOptions.ConnectionString));
+            services.AddSingleton<IMessagePublisher>(provider => new AzureServiceBusMessagePublisher(
+                provider.GetRequiredService<ServiceBusClient>(),
+                serviceBusOptions.TopicName,
+                provider.GetRequiredService<ILogger<AzureServiceBusMessagePublisher>>()));
+        }
+        else
+        {
+            services.AddScoped<IMessagePublisher>(provider =>
+            {
+                if (string.Equals(brokerProvider, "RabbitMq", StringComparison.OrdinalIgnoreCase))
+                {
+                    return new RabbitMqMessagePublisher(provider.GetRequiredService<ILogger<RabbitMqMessagePublisher>>());
+                }
+
+                // Without Broker:AzureServiceBus:Enabled the request is only logged, as before.
+                return new LoggingMessagePublisher(provider.GetRequiredService<ILogger<LoggingMessagePublisher>>());
+            });
+        }
 
         // The fake only runs in Development; elsewhere the status is reported as unavailable
         // until the real HTTP client against Booking (#21) is integrated.

@@ -1,6 +1,7 @@
 using Availability.Application.ReservationRequests;
 using Availability.Infrastructure;
 using Availability.Infrastructure.Booking;
+using Availability.Infrastructure.Messaging;
 using Availability.Web.Models;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using ServiceAuthentication;
@@ -13,7 +14,8 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Availability"),
     builder.Configuration["Broker:Provider"],
-    useFakeBookingClient: builder.Environment.IsDevelopment());
+    useFakeBookingClient: builder.Environment.IsDevelopment(),
+    serviceBusOptions: builder.Configuration.GetSection("Broker:AzureServiceBus").Get<AzureServiceBusPublisherOptions>());
 builder.Services.AddScoped<ReservationRequestHandler>();
 var querySource = builder.Configuration["EventQueries:Source"] ?? "Database";
 if (querySource != "Demo" && querySource != "Database")
