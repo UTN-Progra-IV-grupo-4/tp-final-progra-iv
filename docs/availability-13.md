@@ -41,7 +41,7 @@ Configuración de la consulta:
 | Clave | Variable de entorno | Uso |
 | --- | --- | --- |
 | Booking:BaseUrl | Booking__BaseUrl | URL HTTP/HTTPS de Booking, vacía por defecto; sin ella no se confirma disponibilidad. El perfil http local de Booking usa http://localhost:5088/. |
-| Booking:TimeoutSeconds | Booking__TimeoutSeconds | Límite total de la consulta, incluido el proveedor de token. Por defecto 5 segundos; se aceptan de 1 a 30. |
+| Booking:TimeoutSeconds | Booking__TimeoutSeconds | Límite total de la consulta, incluido el proveedor de token. Por defecto 2 segundos; se aceptan de 1 a 30. |
 
 Se validan el esquema HTTP/HTTPS y la ausencia de credenciales, query y fragmento en BaseUrl. Una configuración inválida falla al registrar el modo Database. Para volver a dejar la URL sin configurar, ejecutar `unset Booking__BaseUrl` en esa terminal.
 
