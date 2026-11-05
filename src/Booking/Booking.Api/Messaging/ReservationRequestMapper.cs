@@ -84,7 +84,7 @@ internal sealed class ReservationRequestMapper
     }
 
     internal static bool IsSafeCorrelationId(string? value) =>
-        value is { Length: > 0 and <= 128 } &&
+        value is { Length: > 0 and <= 64 } &&
         value.All(character => character is
             (>= 'a' and <= 'z') or
             (>= 'A' and <= 'Z') or

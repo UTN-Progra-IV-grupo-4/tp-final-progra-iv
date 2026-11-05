@@ -158,11 +158,25 @@ public sealed class ReservationRequestMapperTests
     }
 
     [Fact]
+    public void Map_WhenPayloadCorrelationIdIsAtLimit_ReturnsBusinessCommand()
+    {
+        var requestId = Guid.NewGuid();
+        var correlationId = new string('a', 64);
+        var delivery = CreateDelivery(requestId, Guid.NewGuid(), Guid.NewGuid(),
+            requestId.ToString(), correlationId);
+
+        var result = mapper.Map(delivery);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(correlationId, result.CorrelationId);
+    }
+
+    [Fact]
     public void Map_WhenPayloadCorrelationIdExceedsLimit_ReturnsInvalidError()
     {
         var requestId = Guid.NewGuid();
         var delivery = CreateDelivery(requestId, Guid.NewGuid(), Guid.NewGuid(),
-            requestId.ToString(), new string('a', 129));
+            requestId.ToString(), new string('a', 65));
 
         Assert.Equal(ReservationRequestMappingErrorCodes.CorrelationIdInvalid,
             mapper.Map(delivery).ErrorCode);
