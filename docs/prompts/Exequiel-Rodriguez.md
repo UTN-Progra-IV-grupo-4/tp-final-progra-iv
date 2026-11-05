@@ -9,7 +9,7 @@
 
 - Las citas son mensajes reales míos, agrupados por tema y en el orden en que los envié. Solo registro los prompts, no las respuestas del agente.
 - Para que la lista sea corta y legible, corregí tipeos y ortografía, y recorté muletillas y dudas que no sumaban («no?», «creo», «me parece», «capaz»). No cambié el sentido de ningún pedido ni agregué pedidos que no hice. Un `…` marca un recorte.
-- Omití confirmaciones breves («dale», «listo», «mandalo nomás»), mensajes repetidos y comandos de rutina. Tampoco incluí los prompts de la etapa final de integración y cierre de tickets, que no aportan al registro.
+- Omití confirmaciones breves («dale», «listo», «mandalo nomás»), mensajes repetidos y comandos de rutina. De la etapa final de integración y cierre de tickets incluyo solo los prompts que orientaron el release (sección 9).
 - Cuando pegué un mensaje de otra persona o de la cátedra, lo indico entre corchetes y no lo reproduzco. Se omiten cadenas de conexión, claves y datos personales.
 - **Contexto** es una síntesis posterior, no parte del prompt.
 
