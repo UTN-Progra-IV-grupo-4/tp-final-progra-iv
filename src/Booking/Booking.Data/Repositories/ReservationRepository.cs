@@ -4,9 +4,42 @@ using Npgsql;
 
 namespace Booking.Data.Repositories;
 
-public sealed class ReservationRepository(BookingDbContext dbContext) : IReservationRepository
+public sealed class ReservationRepository(BookingDbContext dbContext)
+    : IReservationRepository
 {
-    private const string SeatReservationConstraint = "IX_reservations_event_id_seat_id";
+    private const string SeatReservationConstraint =
+        "IX_reservations_event_id_seat_id";
+
+    // Consulta de solo lectura para obtener el estado de una reserva.
+    public async Task<Reservation?> GetByIdAsync(
+        Guid requestId,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Reservations
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                reservation => reservation.Id == requestId,
+                cancellationToken);
+    }
+
+    // Obtiene los asientos ocupados del evento al instante indicado.
+    public async Task<IReadOnlyList<Guid>> GetOccupiedSeatIdsAsync(
+        Guid eventId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken = default)
+    {
+        return await dbContext.Reservations
+            .AsNoTracking()
+            .Where(reservation => reservation.EventId == eventId)
+            .Where(reservation =>
+                reservation.Status == ReservationStatus.Confirmed ||
+                (reservation.Status == ReservationStatus.Retained &&
+                    (!reservation.ExpiresAt.HasValue ||
+                     reservation.ExpiresAt.Value > now)))
+            .Select(reservation => reservation.SeatId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+    }
 
     public async Task<ReservationInsertResult> TryInsertAsync(
         Reservation reservation,
@@ -21,7 +54,8 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
             await dbContext.SaveChangesAsync(cancellationToken);
             return ReservationInsertResult.Created();
         }
-        catch (DbUpdateException exception) when (GetUniqueViolation(exception) is not null)
+        catch (DbUpdateException exception)
+            when (GetUniqueViolation(exception) is not null)
         {
             // SaveChanges leaves failed entries tracked. Detaching them makes the scoped
             // context safe for the query and for a possible Rejected/SeatTaken insert.
@@ -40,10 +74,12 @@ public sealed class ReservationRepository(BookingDbContext dbContext) : IReserva
 
             if (existingReservation is not null)
             {
-                return ReservationInsertResult.RequestIdExists(existingReservation);
+                return ReservationInsertResult.RequestIdExists(
+                    existingReservation);
             }
 
             var uniqueViolation = GetUniqueViolation(exception)!;
+
             if (uniqueViolation.ConstraintName == SeatReservationConstraint)
             {
                 return ReservationInsertResult.SeatTaken();

@@ -1,67 +1,40 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
+using Payment.Business;
+using Payment.Business.Gateways;
+using Payment.Grpc.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Authentication with Keycloak
-var keycloakAuthority = builder.Configuration["Keycloak:Authority"]
-    ?? Environment.GetEnvironmentVariable("KEYCLOAK_ISSUER")
-    ?? "http://localhost:8080/realms/seat-reservation";
-var keycloakAudience = builder.Configuration["Keycloak:Audience"]
-    ?? "payment-service";
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-.AddJwtBearer(options =>
+// Raíz de composición: es el único lugar que conoce las claves de configuración. Business y Data
+// reciben los valores ya resueltos.
+var paymentConnectionString = builder.Configuration.GetConnectionString("Payment");
+if (string.IsNullOrWhiteSpace(paymentConnectionString))
 {
-    options.Authority = keycloakAuthority;
-    options.RequireHttpsMetadata = false;
-    options.Audience = keycloakAudience;
+    throw new InvalidOperationException(
+        "Connection string 'Payment' is not configured. Set it with dotnet user-secrets or the ConnectionStrings__Payment environment variable.");
+}
 
-    options.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true,
-        ValidIssuer = keycloakAuthority,
-        ValidAudiences = new[] { keycloakAudience }
-    };
+builder.Services.AddPaymentBusiness(paymentConnectionString);
 
-    options.Events = new JwtBearerEvents
-    {
-        OnTokenValidated = context =>
-        {
-            var clientId = context.Principal?.FindFirst("azp")?.Value;
-            Console.WriteLine($"[AUTH] Token validated - Client: {clientId}");
-            return Task.CompletedTask;
-        },
-        OnAuthenticationFailed = context =>
-        {
-            Console.WriteLine($"[AUTH ERROR] {context.Exception.Message}");
-            return Task.CompletedTask;
-        }
-    };
-});
+// ValidateOnStart: un modo o una demora inválidos frenan el arranque en vez de fallar en el primer cobro.
+builder.Services.AddOptions<SimulatedGatewayOptions>()
+    .BindConfiguration(SimulatedGatewayOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("ServiceOnly", policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        // Validate that token comes from booking-service
-        policy.RequireClaim("azp", "booking-service");
-    });
-});
+// El vencimiento tiene que superar la demora de la pasarela: si no, se reclamaría un cobro en curso.
+builder.Services.AddOptions<ChargeOptions>()
+    .BindConfiguration(ChargeOptions.SectionName)
+    .ValidateDataAnnotations()
+    .Validate<IOptions<SimulatedGatewayOptions>>(
+        (charge, gatewayOptions) => charge.PendingTimeoutSeconds > gatewayOptions.Value.SlowDelaySeconds,
+        "Charge:PendingTimeoutSeconds tiene que ser mayor que SimulatedGateway:SlowDelaySeconds.")
+    .ValidateOnStart();
 
-// Add services to the container.
 builder.Services.AddGrpc();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.MapGet("/", () => "Communication with gRPC endpoints must be made through a gRPC client. To learn how to create a client, visit: https://go.microsoft.com/fwlink/?linkid=2086909");
+app.MapGrpcService<PaymentGrpcService>();
 
 app.Run();

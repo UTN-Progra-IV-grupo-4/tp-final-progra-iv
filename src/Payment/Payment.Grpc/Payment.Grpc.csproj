@@ -1,14 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <!-- Capa de presentación (N-Layer) y proyecto de arranque: expone el contrato por gRPC y traduce
+       entre Protobuf y los tipos de Business. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Mismo formato que Booking: la cadena de conexión vive en user-secrets, fuera del repositorio público. -->
+    <UserSecretsId>TpFinal.Payment.Grpc</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.64.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.14" />
+    <!-- dotnet ef lo busca en el proyecto de arranque. Misma versión que EF Core en Payment.Data;
+         PrivateAssets: es herramienta de diseño y no viaja con el ejecutable. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Sin Payment.Data: AddPaymentBusiness lo registra, así la presentación no salta la capa de negocio.
+       Contracts trae la clase base generada del servidor; el .proto no se vuelve a compilar acá
+       porque generaría tipos duplicados. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Contracts\Contracts.csproj" />
+    <ProjectReference Include="..\Payment.Business\Payment.Business.csproj" />
   </ItemGroup>
 
 </Project>
