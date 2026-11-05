@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Booking.Business.Reservations;
+using Contracts;
 
 namespace Booking.Api.Messaging;
 
@@ -9,10 +10,10 @@ internal sealed class ReservationRequestMapper
     {
         ArgumentNullException.ThrowIfNull(delivery);
 
-        ProvisionalReservationRequestMessage? message;
+        ReservationRequestMessage? message;
         try
         {
-            message = delivery.Body.ToObjectFromJson<ProvisionalReservationRequestMessage>();
+            message = delivery.Body.ToObjectFromJson<ReservationRequestMessage>();
         }
         catch (JsonException)
         {
