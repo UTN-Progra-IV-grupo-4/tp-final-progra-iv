@@ -63,7 +63,7 @@ En la primera ejecución vas a ver un `Failed executing DbCommand` sobre `__EFMi
 Para verificar que quedó el índice único, que garantiza un cobro por reserva:
 
 ```bash
-docker exec postgres-db psql -U postgres -d payment_db -c "\d charges"
+docker compose exec -T postgres-db psql -U postgres -d payment_db -c "\d charges"
 ```
 
 Tiene que aparecer `"IX_charges_reservation_id" UNIQUE, btree (reservation_id)`. Si en el `.env` cambiaste `POSTGRES_ADMIN_USER`, usá ese usuario en lugar de `postgres`.
@@ -174,14 +174,14 @@ Si el paso 4 todavía responde `Aborted`, la pasarela no terminó: esperá unos 
 Así se coteja un "posible cobro tardío" que informa Booking:
 
 ```bash
-docker exec postgres-db psql -U postgres -d payment_db \
+docker compose exec -T postgres-db psql -U postgres -d payment_db \
   -c "select reservation_id, status, amount_cents, currency, failure_reason, id as charge_id, created_at, completed_at from charges order by created_at"
 ```
 
 Por una reserva puntual:
 
 ```bash
-docker exec postgres-db psql -U postgres -d payment_db \
+docker compose exec -T postgres-db psql -U postgres -d payment_db \
   -c "select status, id from charges where reservation_id = '11111111-1111-4111-8111-000000000001'"
 ```
 
@@ -189,7 +189,7 @@ docker exec postgres-db psql -U postgres -d payment_db \
 
 | Qué | Comando |
 |---|---|
-| Borrar los cobros y conservar la tabla | `docker exec postgres-db psql -U postgres -d payment_db -c "truncate charges"` |
+| Borrar los cobros y conservar la tabla | `docker compose exec -T postgres-db psql -U postgres -d payment_db -c "truncate charges"` |
 | Deshacer todas las migraciones | `dotnet ef database update 0 --project src/Payment/Payment.Data --startup-project src/Payment/Payment.Grpc` |
 | Detener PostgreSQL y conservar los datos | `docker compose stop postgres-db` |
 | Borrar todo, incluidas las bases de los otros servicios | `docker compose down -v` |
