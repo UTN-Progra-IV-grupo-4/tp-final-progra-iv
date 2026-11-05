@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Availability.Application.Abstractions;
 using Availability.Application.ReservationRequests;
 using Availability.Infrastructure.Persistence.Repositories;
@@ -31,15 +32,18 @@ public sealed class ReservationStatusControllerTests(PostgreSqlFixture fixture)
     }
 
     [Fact]
-    public async Task Index_Anonymous_Returns401()
+    public async Task Index_Anonymous_RedirectsToLoginWithoutAskingBooking()
     {
         var bookingStatusClient = new ConfigurableBookingStatusClient();
         var requestId = await SeedRequestAsync("user-42");
         using var factory = CreateFactory(bookingStatusClient);
+        // #14: the MVC page sends anonymous users to the login page (the API keeps answering 401).
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var response = await GetStatusAsync(factory, requestId, userId: null);
+        var response = await client.GetAsync($"/reservas/{requestId}/estado");
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.StartsWith("/Account/Login", response.Headers.Location!.AbsolutePath);
         Assert.Empty(bookingStatusClient.RequestedIds);
     }
 
