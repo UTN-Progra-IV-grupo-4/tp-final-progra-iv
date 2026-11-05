@@ -110,7 +110,7 @@ También se aceptan `KEYCLOAK_ISSUER` y `KEYCLOAK_FRONTEND_CLIENT_ID` como fallb
 - `returnUrl` solo se acepta si es una URL local (`Url.IsLocalUrl`); en otro caso se vuelve a `/`
 - El identificador de usuario que leen `ReservationController` y `ReservationStatusController` sale del claim `sub` o, si el mapeo de claims de ASP.NET lo renombró, de `NameIdentifier` (con Keycloak es el id del usuario del realm; el usuario de desarrollo emite los dos claims con el mismo valor)
 - La cookie guarda los tokens (`SaveTokens`) porque el `id_token` se usa como `id_token_hint` al cerrar sesión; por eso es grande (varios KB, en chunks)
-- Usuarios de ejemplo del realm: `user1` / `user2`, contraseña `User123!`. No tienen nombre ni apellido, así que en el primer login Keycloak pide completar el perfil (acción requerida `VERIFY_PROFILE`)
+- Usuarios de ejemplo del realm: `user1` / `user2`, contraseña `User123!`, con nombre y apellido para que el primer login no pida completar el perfil (`VERIFY_PROFILE`). Keycloak importa el realm solo cuando está vacío: si tu volumen ya tenía el realm, recrealo con `docker compose down -v` (o cargá nombre y apellido a mano en Users) para ver el cambio
 
 ### 2. Logout
 
@@ -152,7 +152,7 @@ Automáticas: `tests/Availability/Availability.Tests/UserAuthenticationTests.cs`
 1. Levantar Keycloak con `docker compose up -d keycloak` (el realm se importa solo si está vacío)
 2. Ejecutar Availability.Web con `DevelopmentAuthentication__Enabled=false` (en Development) o en el entorno real
 3. Navegar a `/Account/Login` y hacer click en "Login con Keycloak"
-4. Iniciar sesión en Keycloak (`user1` / `User123!`) y completar el perfil si lo pide
+4. Iniciar sesión en Keycloak (`user1` / `User123!`)
 5. Verificar la redirección de vuelta y el usuario en el navbar
 6. Reservar un asiento: `reservation_requests.user_id` es el id del usuario en Keycloak
 7. Hacer logout: se redirige a Keycloak y la sesión de Keycloak termina (el siguiente login vuelve a pedir contraseña)
