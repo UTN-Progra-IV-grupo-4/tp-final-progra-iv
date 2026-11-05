@@ -61,7 +61,7 @@ After recording the result, run `peek-active` again and optionally `peek-dlq` wi
 
 ## Observed execution: 2026-11-04
 
-The test used local PostgreSQL 16, `grupo4-booking-topic/booking`, two Booking.Api processes on ports 5088 and 5089, and the sender from `tests/Booking/Booking.BrokerSmoke`. The working branch was based on `347ff96` with the shared-contract replacement still uncommitted; record the final commit SHA after review.
+The test used local PostgreSQL 16, `grupo4-booking-topic/booking`, two Booking.Api processes on ports 5088 and 5089, and the sender from `tests/Booking/Booking.BrokerSmoke`. It ran on a working tree based on `347ff96` that already used the shared contract but was not yet committed; the later commits of this branch only add tests and documentation, so the consumer code path is the same. It was run by the PR author and has not been independently reproduced.
 
 | Instance | MessageId / RequestId | Consumer log | PostgreSQL result |
 | --- | --- | --- | --- |
