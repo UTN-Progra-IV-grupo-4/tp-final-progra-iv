@@ -151,6 +151,10 @@ Each service contract has its own diagram in `docs/contracts/`: [reservation req
 
 ## Getting started
 
+**Quick start (Windows, PowerShell):** copy `.env.example` to `.env`, set `AZURE_SERVICE_BUS_CONNECTION_STRING` and run `./infra/scripts/run-local.ps1` (stop with `./infra/scripts/stop-local.ps1`). Local passwords and secrets in `.env.example` are throwaway values for development only; Google login is optional (without it, sign in with `user1` / `User123!`).
+
+> **The script does not run without the broker.** `run-local.ps1` requires `AZURE_SERVICE_BUS_CONNECTION_STRING` (Azure Service Bus: topic `grupo4-booking-topic`, subscription `booking`, provided by the course). If it is empty the script aborts without changing anything, because without the broker Availability accepts the request but Booking never receives it and there is no end-to-end flow.
+
 Requires **Docker** and the **.NET SDK 10** (`dotnet --version`); `global.json` pins it. To run the whole system with service authentication, follow [docs/running-locally.md](docs/running-locally.md) (demo script: [docs/demo.md](docs/demo.md)). Everything lives in a single solution:
 
 ```
