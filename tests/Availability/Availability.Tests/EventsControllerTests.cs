@@ -13,7 +13,7 @@ public class EventsControllerTests
     {
         var controller = CreateController(new DemoSeatOccupancyQuery());
         var seatId = DemoCatalogData.SeatId(1, 1);
-        var result = Assert.IsType<ViewResult>(await controller.Seats(DemoCatalogData.EventId(1), seatId, default));
+        var result = Assert.IsType<ViewResult>(await controller.Seats(DemoCatalogData.EventId(1), seatId.ToString(), default));
         var model = Assert.IsType<EventSeatsViewModel>(result.Model);
         Assert.Equal(seatId, model.SelectedSeatId);
         Assert.True(controller.ModelState.IsValid);
@@ -26,7 +26,7 @@ public class EventsControllerTests
     {
         var controller = CreateController(new DemoSeatOccupancyQuery());
         var result = Assert.IsType<ViewResult>(await controller.Seats(DemoCatalogData.EventId(1),
-            DemoCatalogData.SeatId(eventNumber, position), default));
+            DemoCatalogData.SeatId(eventNumber, position).ToString(), default));
         Assert.Null(Assert.IsType<EventSeatsViewModel>(result.Model).SelectedSeatId);
         Assert.False(controller.ModelState.IsValid);
     }
@@ -36,9 +36,23 @@ public class EventsControllerTests
     {
         var controller = CreateController(new UnconfirmedSeatOccupancyStub());
         var result = Assert.IsType<ViewResult>(await controller.Seats(DemoCatalogData.EventId(1),
-            DemoCatalogData.SeatId(1, 1), default));
+            DemoCatalogData.SeatId(1, 1).ToString(), default));
         Assert.Null(Assert.IsType<EventSeatsViewModel>(result.Model).SelectedSeatId);
         Assert.False(controller.ModelState.IsValid);
+    }
+
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    [InlineData("<script>")]
+    public async Task InvalidSeatId_IsRejectedWithSpanishMessage(string selectedSeatId)
+    {
+        var controller = CreateController(new DemoSeatOccupancyQuery());
+        var result = Assert.IsType<ViewResult>(await controller.Seats(DemoCatalogData.EventId(1), selectedSeatId, default));
+        Assert.Null(Assert.IsType<EventSeatsViewModel>(result.Model).SelectedSeatId);
+        Assert.False(controller.ModelState.IsValid);
+        var message = controller.ModelState[string.Empty]!.Errors.Single().ErrorMessage;
+        Assert.StartsWith("El asiento elegido no está disponible", message);
     }
 
     [Fact]

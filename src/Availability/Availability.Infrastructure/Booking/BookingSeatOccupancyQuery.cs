@@ -13,6 +13,9 @@ public class BookingSeatOccupancyQuery(
     IBookingServiceTokenProvider tokenProvider,
     ILogger<BookingSeatOccupancyQuery> logger) : ISeatOccupancyQuery
 {
+    // El token pendiente se repite en cada visita pública: Warning solo la primera vez por proceso.
+    private static int pendingTokenWarningLogged;
+
     public async Task<SeatOccupancy> GetOccupiedSeatsAsync(Guid eventId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -30,7 +33,15 @@ public class BookingSeatOccupancyQuery(
             var token = await tokenProvider.GetAccessTokenAsync(timeout.Token);
             if (string.IsNullOrWhiteSpace(token) || token.Any(char.IsWhiteSpace))
             {
-                logger.LogWarning("Ocupación sin confirmar: no hay token de availability-service. Integración pendiente del #11.");
+                const string message = "Ocupación sin confirmar: no hay token de availability-service. Integración pendiente del #11.";
+                if (Interlocked.Exchange(ref pendingTokenWarningLogged, 1) == 0)
+                {
+                    logger.LogWarning(message);
+                }
+                else
+                {
+                    logger.LogDebug(message);
+                }
                 return Unknown(eventId);
             }
 

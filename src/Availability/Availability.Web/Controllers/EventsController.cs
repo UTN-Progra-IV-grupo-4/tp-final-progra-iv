@@ -18,7 +18,7 @@ public class EventsController(EventQueryService queries, EventDisplayOptions dis
     }
 
     [HttpGet("{eventId:guid}/asientos")]
-    public async Task<IActionResult> Seats(Guid eventId, Guid? selectedSeatId, CancellationToken cancellationToken)
+    public async Task<IActionResult> Seats(Guid eventId, string? selectedSeatId, CancellationToken cancellationToken)
     {
         var eventData = await queries.GetSeatsAsync(eventId, cancellationToken);
         if (eventData is null)
@@ -26,19 +26,26 @@ public class EventsController(EventQueryService queries, EventDisplayOptions dis
             return NotFound();
         }
 
-        if (selectedSeatId.HasValue)
+        Guid? confirmedSeatId = null;
+        if (!string.IsNullOrWhiteSpace(selectedSeatId))
         {
-            var seat = eventData.Seats.SingleOrDefault(s => s.Id == selectedSeatId.Value);
+            // Se parsea a mano para no exponer el mensaje en inglés del model binding.
+            var seat = Guid.TryParse(selectedSeatId, out var parsedSeatId)
+                ? eventData.Seats.SingleOrDefault(candidate => candidate.Id == parsedSeatId)
+                : null;
             // Los radios ayudan en el navegador; la validación del servidor evita
             // seleccionar un asiento ajeno, ocupado o con disponibilidad desconocida.
             if (seat is null || seat.Availability != SeatAvailability.Available)
             {
                 ModelState.AddModelError("", "El asiento elegido no está disponible para seleccionar. Actualizá el mapa.");
-                selectedSeatId = null;
+            }
+            else
+            {
+                confirmedSeatId = seat.Id;
             }
         }
 
         // GET solo confirma una elección en pantalla. El envío de la reserva pertenece al #15.
-        return View(new EventSeatsViewModel(eventData, displayOptions.IsDemo, selectedSeatId));
+        return View(new EventSeatsViewModel(eventData, displayOptions.IsDemo, confirmedSeatId));
     }
 }

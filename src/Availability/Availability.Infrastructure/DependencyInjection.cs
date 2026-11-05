@@ -34,7 +34,9 @@ public static class DependencyInjection
             {
                 client.BaseAddress = baseAddress;
                 client.Timeout = timeout;
-            });
+            })
+            // Un 302 de Booking debe tratarse como respuesta inesperada, no seguirse.
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
         }
         return services;
     }

@@ -3,7 +3,7 @@ namespace Availability.Infrastructure.Booking;
 public class BookingQueryOptions
 {
     public string BaseUrl { get; set; } = string.Empty;
-    public int TimeoutSeconds { get; set; } = 5;
+    public int TimeoutSeconds { get; set; } = 2;
 
     public Uri? GetBaseAddress()
     {
