@@ -12,6 +12,8 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.64.0" />
+    <!-- Same version as Booking.Api: both validate Keycloak service tokens. -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.13" />
     <!-- dotnet ef lo busca en el proyecto de arranque. Misma versión que EF Core en Payment.Data;
          PrivateAssets: es herramienta de diseño y no viaja con el ejecutable. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.14">

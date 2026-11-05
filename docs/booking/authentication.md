@@ -38,4 +38,4 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:<booking-port>/api/reser
 
 ## Reutilización
 
-#11 reutiliza este mismo cableado (`AddServiceAuthentication` y la política por cliente) para proteger Payment.
+Payment reutiliza este mismo cableado (`AddServiceAuthentication` y la política por cliente). Los tokens salientes se piden con `src/ServiceAuthentication`; ver [docs/11-Autenticacion-entre-servicios.md](../11-Autenticacion-entre-servicios.md).

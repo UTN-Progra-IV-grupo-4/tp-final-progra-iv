@@ -10,6 +10,8 @@
 
   <!-- Mismas versiones que Booking.Tests: la CI corre todos los proyectos de test de la solución. -->
   <ItemGroup>
+    <PackageReference Include="Grpc.Net.Client" Version="2.64.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.16.0" />
@@ -23,6 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Payment\Payment.Business\Payment.Business.csproj" />
     <ProjectReference Include="..\..\..\src\Payment\Payment.Data\Payment.Data.csproj" />
+    <ProjectReference Include="..\..\..\src\Contracts\Contracts.csproj" />
     <ProjectReference Include="..\..\..\src\Payment\Payment.Grpc\Payment.Grpc.csproj" />
   </ItemGroup>
 

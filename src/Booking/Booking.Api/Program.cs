@@ -4,6 +4,7 @@ using Booking.Api.Reservations;
 using Booking.Business;
 using Booking.Business.Reservations;
 using Microsoft.Extensions.Options;
+using ServiceAuthentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,8 @@ builder.Services
 builder.Services.AddHostedService<ExpiredReservationsBackgroundService>();
 builder.Services.AddBookingMessaging(builder.Configuration);
 builder.Services.AddServiceAuthentication(builder.Configuration);
+// Outgoing: booking-service token (client credentials) for the Payment gRPC client.
+builder.Services.AddServiceTokenProvider(builder.Configuration);
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi

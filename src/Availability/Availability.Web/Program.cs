@@ -1,8 +1,10 @@
 using Availability.Application.ReservationRequests;
 using Availability.Infrastructure;
 using Availability.Infrastructure.Booking;
+using Availability.Infrastructure.Messaging;
 using Availability.Web.Models;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using ServiceAuthentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +14,8 @@ builder.Services.AddControllersWithViews();
 builder.Services.AddInfrastructure(
     builder.Configuration.GetConnectionString("Availability"),
     builder.Configuration["Broker:Provider"],
-    useFakeBookingClient: builder.Environment.IsDevelopment());
+    useFakeBookingClient: builder.Environment.IsDevelopment(),
+    serviceBusOptions: builder.Configuration.GetSection("Broker:AzureServiceBus").Get<AzureServiceBusPublisherOptions>());
 builder.Services.AddScoped<ReservationRequestHandler>();
 var querySource = builder.Configuration["EventQueries:Source"] ?? "Database";
 if (querySource != "Demo" && querySource != "Database")
@@ -47,6 +50,10 @@ builder.Services
             return Task.CompletedTask;
         };
     });
+
+// Outgoing: availability-service token (client credentials) for the calls to Booking.
+// Independent from the cookie scheme above, which stays the default for end users.
+builder.Services.AddServiceTokenProvider(builder.Configuration);
 
 var app = builder.Build();
 

@@ -12,6 +12,7 @@
     <ProjectReference Include="..\Availability.Application\Availability.Application.csproj" />
     <!-- Solo el punto de composición (Program.cs) registra las implementaciones concretas. -->
     <ProjectReference Include="..\Availability.Infrastructure\Availability.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\ServiceAuthentication\ServiceAuthentication.csproj" />
   </ItemGroup>
 
   <ItemGroup>
