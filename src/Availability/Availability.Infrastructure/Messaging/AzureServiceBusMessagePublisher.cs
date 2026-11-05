@@ -8,41 +8,34 @@ namespace Availability.Infrastructure.Messaging;
 
 public sealed class AzureServiceBusMessagePublisher : IMessagePublisher
 {
-    private readonly string _connectionString;
+    private readonly ServiceBusSender _sender;
     private readonly string _topicName;
     private readonly ILogger<AzureServiceBusMessagePublisher> _logger;
 
+    // The sender comes from a ServiceBusClient shared for the whole process: creating a client
+    // per publish opens a new AMQP connection each time, which is slow and exhausts connections.
     public AzureServiceBusMessagePublisher(
-        string? connectionString,
-        string? topicName,
+        ServiceBusClient client,
+        string topicName,
         ILogger<AzureServiceBusMessagePublisher> logger)
     {
-        _connectionString = connectionString ?? string.Empty;
-        _topicName = string.IsNullOrWhiteSpace(topicName) ? "reservation-requests" : topicName;
+        if (string.IsNullOrWhiteSpace(topicName))
+        {
+            throw new ArgumentException("The topic name is required.", nameof(topicName));
+        }
+
+        _topicName = topicName;
+        _sender = client.CreateSender(topicName);
         _logger = logger;
     }
 
     public async Task PublishAsync<T>(T message, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_connectionString))
-        {
-            throw new InvalidOperationException(
-                "Broker:AzureServiceBus:ConnectionString is required when Azure Service Bus is enabled.");
-        }
-
-        if (string.IsNullOrWhiteSpace(_topicName))
-        {
-            throw new InvalidOperationException(
-                "Broker:AzureServiceBus:TopicName is required when Azure Service Bus is enabled.");
-        }
-
-        await using var client = new ServiceBusClient(_connectionString);
-        await using var sender = client.CreateSender(_topicName);
-
         var payload = JsonSerializer.SerializeToUtf8Bytes(message);
         var serviceBusMessage = new ServiceBusMessage(BinaryData.FromBytes(payload))
         {
-            Subject = typeof(T).Name
+            Subject = typeof(T).Name,
+            ContentType = "application/json"
         };
 
         if (message is ReservationRequestMessage reservationRequest)
@@ -58,7 +51,7 @@ public sealed class AzureServiceBusMessagePublisher : IMessagePublisher
             serviceBusMessage.CorrelationId = Guid.NewGuid().ToString();
         }
 
-        await sender.SendMessageAsync(serviceBusMessage, cancellationToken);
+        await _sender.SendMessageAsync(serviceBusMessage, cancellationToken);
 
         _logger.LogInformation(
             "Azure Service Bus message published to topic {TopicName}. MessageId: {MessageId}.",
