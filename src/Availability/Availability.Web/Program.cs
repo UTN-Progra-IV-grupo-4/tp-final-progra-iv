@@ -4,6 +4,7 @@ using Availability.Infrastructure.Booking;
 using Availability.Infrastructure.Messaging;
 using Availability.Web.Models;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using ServiceAuthentication;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,10 @@ builder.Services
             return Task.CompletedTask;
         };
     });
+
+// Outgoing: availability-service token (client credentials) for the calls to Booking.
+// Independent from the cookie scheme above, which stays the default for end users.
+builder.Services.AddServiceTokenProvider(builder.Configuration);
 
 var app = builder.Build();
 
