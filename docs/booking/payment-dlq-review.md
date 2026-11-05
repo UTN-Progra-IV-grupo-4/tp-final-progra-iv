@@ -1,6 +1,6 @@
 # Booking dead-letter review (#18 and #19)
 
-The owner of Booking issues #18 and #19 reviews messages in the dead-letter queue (DLQ) of the Booking subscription. This procedure records and routes the outcome; it does not refund a charge, confirm a reservation, or replay a message automatically. Payment processing and the Azure Service Bus consumer remain disabled until the integration is ready.
+The owner of Booking issues #18 and #19 reviews messages in the dead-letter queue (DLQ) of the Booking subscription. The team confirmed that a late or otherwise unpaired charge is not automatically refunded. This procedure records and routes the outcome for audit review (#24) and manual reconciliation; it does not refund a charge, confirm a reservation, or replay a message automatically. Payment processing and the Azure Service Bus consumer remain disabled until the integration is ready.
 
 ## Identify the case
 
