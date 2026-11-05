@@ -34,3 +34,6 @@ appsettings.*.local.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Estado local de run-local.ps1 (PIDs y logs)
+.run/

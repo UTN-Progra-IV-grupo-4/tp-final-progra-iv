@@ -16,6 +16,25 @@ flowchart LR
     KC -.-> Pay
 ```
 
+## Atajo: un solo comando (Windows)
+
+Si tenés PowerShell, el .NET SDK 10 y Docker Desktop, el script hace por vos las secciones 3, 4 y 5 de esta guía (infraestructura, migraciones, datos de demo y los tres servicios en segundo plano). Solo necesita el `.env` de la sección 2:
+
+```powershell
+./infra/scripts/run-local.ps1                  # usa el .env de la raíz (o -EnvFile <ruta>)
+./infra/scripts/stop-local.ps1                 # detiene los servicios por PID y baja los contenedores
+./infra/scripts/run-local.ps1 -Reset           # vacía las reservas (conserva el catálogo) y vuelve a levantar
+./infra/scripts/stop-local.ps1 -RemoveData     # además borra los volúmenes (bases y Keycloak desde cero)
+```
+
+- Valida el `.env` y lista todas las variables que faltan antes de tocar nada. Además de las de la sección 2 exige `AZURE_SERVICE_BUS_CONNECTION_STRING` (topic `grupo4-booking-topic`, suscripción `booking`).
+- Si `GOOGLE_CLIENT_ID` tiene valor, habilita el proveedor `google` del realm por la API de administración de Keycloak (sin imprimir secretos).
+- Se puede ejecutar más de una vez: los servicios que ya corren no se vuelven a levantar. Los PIDs quedan en `.run/pids.json` y los logs en `.run/*.log` (ambos ignorados por Git); `stop-local.ps1` solo detiene esos PIDs.
+- Tarda unos 35 s la primera vez (con las imágenes ya descargadas) y unos 18 s las siguientes. Si ejecutás el script con su salida entubada (`| Out-String`), la tubería no se cierra hasta que los servicios terminen: no lo entubes.
+- `-Reset` no vacía el broker; revisá que la suscripción de Azure Service Bus tenga 0 mensajes activos (sección 7).
+
+Las secciones siguientes explican el mismo proceso paso a paso, por si necesitás hacerlo a mano o en otro sistema operativo.
+
 ## 1. Requisitos
 
 - .NET SDK 10 (versión de `global.json`) y Docker Desktop encendido.
