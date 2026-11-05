@@ -55,7 +55,7 @@
                 break;
         }
     }
-@if (!Model.BookingUnavailable && (Model.Status is null || Model.Status == ReservationStatus.Retained))
+    @if (Model.BookingUnavailable || Model.Status is null || Model.Status == ReservationStatus.Retained)
     {
         <div id="poll-timeout" class="alert alert-light d-none">
             Todavía no tenemos respuesta.
@@ -63,7 +63,8 @@
         </div>
         <script>
             (() => {
-                // Polling policy agreed in #16: keep asking while processing or retained, stop after the max time.
+                // Polling policy agreed in #16: keep asking while processing, retained or while Booking is
+                // unavailable (it may recover), and stop after the max time.
                 const intervalMs = @(Model.PollIntervalSeconds) * 1000;
                 const maxMs = @(Model.PollMaxSeconds) * 1000;
                 const url = new URL(window.location.href);

@@ -15,6 +15,8 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         .WithPassword("availability_tests") // Credencial exclusiva del contenedor descartable.
         .Build();
 
+    public string ConnectionString => container.GetConnectionString();
+
     public async Task InitializeAsync()
     {
         await container.StartAsync();
