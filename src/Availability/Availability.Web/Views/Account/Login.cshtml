@@ -1,0 +1,48 @@
+@{
+    ViewData["Title"] = "Login";
+    var returnUrl = ViewData["ReturnUrl"] as string;
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="text-center">Iniciar Sesión</h3>
+            </div>
+            <div class="card-body">
+                <p class="text-center mb-4">
+                    @if (Context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() &&
+                         Context.RequestServices.GetRequiredService<IConfiguration>().GetValue<bool>("DevelopmentAuthentication:Enabled", false))
+                    {
+                        <text>
+                            <strong>Modo Desarrollo:</strong> Estás usando autenticación de desarrollo con un usuario fijo.
+                        </text>
+                    }
+                    else
+                    {
+                        <text>
+                            Serás redirigido a Keycloak para iniciar sesión.
+                        </text>
+                    }
+                </p>
+
+                <form method="post" asp-action="LoginPost" asp-route-returnUrl="@returnUrl">
+                    @Html.AntiForgeryToken()
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            @if (Context.RequestServices.GetRequiredService<IWebHostEnvironment>().IsDevelopment() &&
+                                 Context.RequestServices.GetRequiredService<IConfiguration>().GetValue<bool>("DevelopmentAuthentication:Enabled", false))
+                            {
+                                <text>Login (Development)</text>
+                            }
+                            else
+                            {
+                                <text>Login con Keycloak</text>
+                            }
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
