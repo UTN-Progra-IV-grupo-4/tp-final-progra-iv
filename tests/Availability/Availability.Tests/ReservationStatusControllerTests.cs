@@ -30,6 +30,116 @@ public sealed class ReservationStatusControllerTests(PostgreSqlFixture fixture)
         Assert.Contains("poll-timeout", body);
     }
 
+    [Fact]
+    public async Task Index_Anonymous_Returns401()
+    {
+        var bookingStatusClient = new ConfigurableBookingStatusClient();
+        var requestId = await SeedRequestAsync("user-42");
+        using var factory = CreateFactory(bookingStatusClient);
+
+        var response = await GetStatusAsync(factory, requestId, userId: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(bookingStatusClient.RequestedIds);
+    }
+
+    [Fact]
+    public async Task Index_RequestOfAnotherUserAndUnknownRequest_AreIndistinguishable404WithoutAskingBooking()
+    {
+        var bookingStatusClient = new ConfigurableBookingStatusClient();
+        var requestId = await SeedRequestAsync("user-42");
+        using var factory = CreateFactory(bookingStatusClient);
+
+        var foreignResponse = await GetStatusAsync(factory, requestId, "user-99");
+        var unknownResponse = await GetStatusAsync(factory, Guid.NewGuid(), "user-99");
+
+        Assert.Equal(HttpStatusCode.NotFound, foreignResponse.StatusCode);
+        Assert.Equal(foreignResponse.StatusCode, unknownResponse.StatusCode);
+        Assert.Equal(string.Empty, await foreignResponse.Content.ReadAsStringAsync());
+        Assert.Equal(string.Empty, await unknownResponse.Content.ReadAsStringAsync());
+        Assert.Empty(bookingStatusClient.RequestedIds);
+    }
+
+    [Fact]
+    public async Task Index_RequestIdIsNotAGuid_Returns404()
+    {
+        var bookingStatusClient = new ConfigurableBookingStatusClient();
+        using var factory = CreateFactory(bookingStatusClient);
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/reservas/not-a-guid/estado");
+        request.Headers.Add(ReservationStatusWebFactory.UserHeader, "user-42");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(bookingStatusClient.RequestedIds);
+    }
+
+    [Fact]
+    public async Task Index_Processing_RendersProcessingAndPolls()
+    {
+        var body = await GetBodyAsync(_ => null);
+
+        Assert.Contains("Procesando", body);
+        Assert.Contains(PollingMarker, body);
+    }
+
+    [Fact]
+    public async Task Index_Retained_RendersRetainedAndPolls()
+    {
+        var body = await GetBodyAsync(requestId => Result(requestId, ReservationStatus.Retained));
+
+        Assert.Contains("Retenida", body);
+        Assert.Contains(PollingMarker, body);
+    }
+
+    [Fact]
+    public async Task Index_Confirmed_RendersConfirmedWithoutPolling()
+    {
+        var body = await GetBodyAsync(requestId => Result(requestId, ReservationStatus.Confirmed));
+
+        Assert.Contains("Confirmada", body);
+        Assert.DoesNotContain(PollingMarker, body);
+    }
+
+    [Fact]
+    public async Task Index_RejectedWithReason_RendersTheReasonWithoutPolling()
+    {
+        var body = await GetBodyAsync(requestId =>
+            Result(requestId, ReservationStatus.Rejected, ReservationRejectionReason.PaymentFailed));
+
+        Assert.Contains("Rechazada", body);
+        Assert.Contains("El pago fue rechazado.", body);
+        Assert.DoesNotContain(PollingMarker, body);
+    }
+
+    [Fact]
+    public async Task Index_Expired_RendersExpiredWithoutPolling()
+    {
+        var body = await GetBodyAsync(requestId => Result(requestId, ReservationStatus.Expired));
+
+        Assert.Contains("Vencida", body);
+        Assert.DoesNotContain(PollingMarker, body);
+    }
+
+    private async Task<string> GetBodyAsync(Func<Guid, ReservationStatusResult?> answer)
+    {
+        var bookingStatusClient = new ConfigurableBookingStatusClient { Answer = answer };
+        var requestId = await SeedRequestAsync("user-42");
+        using var factory = CreateFactory(bookingStatusClient);
+
+        var response = await GetStatusAsync(factory, requestId, "user-42");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await response.Content.ReadAsStringAsync();
+    }
+
+    private static ReservationStatusResult Result(
+        Guid requestId,
+        ReservationStatus status,
+        ReservationRejectionReason? rejectionReason = null)
+        => new() { RequestId = requestId, Status = status, RejectionReason = rejectionReason };
+
     private ReservationStatusWebFactory CreateFactory(
         ConfigurableBookingStatusClient bookingStatusClient,
         IReadOnlyDictionary<string, string>? settings = null)
