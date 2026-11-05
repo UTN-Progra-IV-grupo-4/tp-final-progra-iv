@@ -63,7 +63,7 @@ Comportamiento:
 
 ### Uso desde Availability
 
-`IBookingServiceTokenProvider` (#47) debe devolver el `access_token` de `availability-service`. Con esta librería la implementación es un adaptador de una línea sobre `IServiceTokenProvider.GetAccessTokenAsync(cancellationToken)`, que ya devuelve el token sin prefijo `Bearer`.
+Los dos clientes HTTP hacia Booking (ocupación de asientos, #13, y estado de la solicitud, #16) se registran con `.AddServiceBearerToken()` desde un único ayudante (`BookingHttpClientRegistration`, en `Availability.Infrastructure`), y `Availability.Web` registra `AddServiceTokenProvider(configuration)`. El proveedor es un singleton: un solo token en caché para todas las visitas, sin pedido a Keycloak por petición. Sin token (secreto ausente o incorrecto, Keycloak caído) la petición a Booking no se envía y Availability degrada a "ocupación sin confirmar" / "Booking no disponible". Configuración: `Booking:BaseUrl`, `ServiceCredentials:Authority` y `ServiceCredentials:ClientSecret` (user-secrets o variable de entorno). Detalle en `docs/availability-13.md`.
 
 ### Uso desde Booking
 

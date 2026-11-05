@@ -32,16 +32,39 @@ Para volver a la demo en esa terminal, ejecutar `unset EventQueries__Source`. ap
 
 En modo Database, BookingSeatOccupancyQuery consume `GET /api/events/{eventId}/occupied-seats` según el contrato del #21, ya implementado en Booking. Se registra como cliente tipado con IHttpClientFactory y no referencia los proyectos de Booking: su DTO de transporte es privado de Infrastructure. Demo sigue utilizando la ocupación simulada.
 
-**La obtención del token real sigue pendiente del #11.** IBookingServiceTokenProvider separa esa responsabilidad del cliente HTTP. Su registro actual, PendingBookingServiceTokenProvider, devuelve null: sin token no se envía una llamada anónima a Booking y el mapa mantiene la disponibilidad sin confirmar. Tampoco se permite elegir asientos en ese estado. No se hace fallback a la ocupación simulada.
+**Token de servicio (#11).** Las llamadas a Booking llevan el token de `availability-service` (client credentials), sin token de usuario: el visitante sigue siendo anónimo. Se obtiene con `src/ServiceAuthentication`: el proveedor es un singleton que guarda el token en memoria y lo renueva antes de que venza, y el cliente HTTP lo adjunta con `.AddServiceBearerToken()`. Si no se puede obtener el token (Keycloak caído, `ClientSecret` incorrecto o ausente), la petición a Booking no se envía: la ocupación queda sin confirmar, los asientos se deshabilitan y se muestra "No podemos confirmar la disponibilidad". No hay fallback a la ocupación simulada. No se registran tokens ni secretos.
 
-El #11 deberá reemplazar el proveedor por client credentials de availability-service, con la audiencia y los permisos que acepta Booking (ver `docs/booking/authentication.md`). El visitante sigue siendo anónimo; no se usa el token de availability-web ni se reenvía uno del usuario. El proveedor debe respetar el CancellationToken. No se guardan tokens estáticos ni client secrets en appsettings.
+## Cliente HTTP compartido con #16
+
+La ocupación (`BookingSeatOccupancyQuery`, #13) y el estado de la solicitud (`BookingStatusClient`, #16, `GET /api/reservations/{requestId}/status`) se registran con el mismo ayudante (`BookingHttpClientRegistration`): misma `Booking:BaseUrl`, mismo `Booking:TimeoutSeconds`, redirecciones deshabilitadas (un 3xx es una respuesta inesperada, no se sigue) y el mismo token de servicio.
+
+`BookingStatusClient` mapea el 200 del contrato (`docs/contracts/reservation-status.md`) a `ReservationStatusResult`. Un 404 con `application/problem+json` es "procesando" (devuelve null). Cualquier otra cosa (404 sin Problem Details, 400, 401, 403, 3xx, 5xx, timeout, error de red, sin token, JSON inválido, otro `requestId`, estado o motivo fuera del contrato) es "Booking no disponible" (`BookingUnavailableException`); nunca se inventa un estado. La pertenencia de la solicitud al usuario se comprueba antes, en Availability.
+
+Qué cliente de estado se registra:
+
+| Condición | Cliente |
+| --- | --- |
+| `Booking:BaseUrl` configurada (y `EventQueries:Source=Database`) | `BookingStatusClient` (real) |
+| Sin `Booking:BaseUrl`, en Development | `FakeBookingStatusClient` |
+| Sin `Booking:BaseUrl`, fuera de Development | `UnavailableBookingStatusClient` |
+| `EventQueries:Source=Demo` | Nunca el real: se usa el falso (Demo solo existe en Development) |
+
+Configuración necesaria para hablar con Booking real:
+
+| Clave | Variable de entorno | Notas |
+| --- | --- | --- |
+| `Booking:BaseUrl` | `Booking__BaseUrl` | URL de Booking, por ejemplo `http://localhost:5088/`. |
+| `ServiceCredentials:Authority` | `ServiceCredentials__Authority` | URL del realm de Keycloak; en Development ya apunta a `http://localhost:8080/realms/seat-reservation`. |
+| `ServiceCredentials:ClientSecret` | `ServiceCredentials__ClientSecret` | Secreto de `availability-service`: `dotnet user-secrets set` o variable de entorno. Nunca se versiona. |
+
+Ver `docs/11-Autenticacion-entre-servicios.md` para el detalle de `ServiceCredentials`.
 
 Configuración de la consulta:
 
 | Clave | Variable de entorno | Uso |
 | --- | --- | --- |
 | Booking:BaseUrl | Booking__BaseUrl | URL HTTP/HTTPS de Booking, vacía por defecto; sin ella no se confirma disponibilidad. El perfil http local de Booking usa http://localhost:5088/. |
-| Booking:TimeoutSeconds | Booking__TimeoutSeconds | Límite total de la consulta, incluido el proveedor de token. Por defecto 2 segundos; se aceptan de 1 a 30. |
+| Booking:TimeoutSeconds | Booking__TimeoutSeconds | Límite total de la consulta, incluida la obtención del token. Por defecto 2 segundos; se aceptan de 1 a 30. |
 
 Se validan el esquema HTTP/HTTPS y la ausencia de credenciales, query y fragmento en BaseUrl. Una configuración inválida falla al registrar el modo Database. Para volver a dejar la URL sin configurar, ejecutar `unset Booking__BaseUrl` en esa terminal.
 
@@ -75,7 +98,7 @@ dotnet test tests/Availability/Availability.Tests/Availability.Tests.csproj
 
 Los tests cubren el esquema del #12, el seed repetible con cuarenta asientos, la conservación de referencias al ampliar el catálogo, la igualdad entre memoria y PostgreSQL, las consultas de disponibilidad y la validación del controlador. Los tests de PostgreSQL usan contenedores descartables y no modifican el compose local.
 
-BookingSeatOccupancyQueryTests verifica el método y ruta HTTP, el encabezado Bearer de servicio, respuesta vacía válida, errores HTTP, JSON inválido, timeout, cancelación y ausencia de token/configuración. BookingOccupancyEndpointTests ejecuta el pipeline MVC y el adaptador HTTP con respuestas controladas: un visitante anónimo ve los ocupados en gris y, si Booking responde 401/403/503, todos los asientos quedan sin confirmar y deshabilitados. Los tokens de esos tests son ficticios y no se envían a servicios reales. Estas pruebas no sustituyen la verificación autenticada con Keycloak y Booking del #11.
+BookingSeatOccupancyQueryTests verifica el método y ruta HTTP, el encabezado Bearer de servicio, respuesta vacía válida, errores HTTP, JSON inválido, timeout, cancelación y ausencia de token/configuración. BookingOccupancyEndpointTests ejecuta el pipeline MVC y el adaptador HTTP con respuestas controladas: un visitante anónimo ve los ocupados en gris y, si Booking responde 401/403/503, todos los asientos quedan sin confirmar y deshabilitados. Los tokens de esos tests son ficticios y no se envían a servicios reales. BookingClientPipelineTests ejecuta los dos clientes con el registro real: el Bearer llega a Booking, un fallo de token no envía nada, un único pedido de token sirve a muchas llamadas y las redirecciones no se siguen. BookingStatusClientTests cubre el mapeo de estados y los modos de fallo del cliente de #16.
 
 Para comprobar visualmente: abrir eventos, entrar a un mapa, verificar sus dos filas, elegir A1 y pulsar Elegir asiento. Debe aparecer la elección sin crear una reserva. A2 y B3 deben verse grises. Una URL que intente seleccionar uno de esos asientos debe mostrar un error. Un evento inexistente devuelve 404.
 
@@ -86,7 +109,7 @@ Para comprobar visualmente: abrir eventos, entrar a un mapa, verificar sus dos f
 - [x] Seed confirmado ampliado a veinte asientos por evento, con IDs anteriores conservados.
 - [x] Consulta de catálogo PostgreSQL y pruebas de integración.
 - [x] Cliente HTTP del contrato de ocupación del #21 y pruebas con respuestas controladas.
-- [ ] Token de servicio availability-service y permisos definidos por #11.
+- [x] Token de servicio availability-service (#11): proveedor singleton con caché y `.AddServiceBearerToken()`.
 - [ ] Verificación real de punta a punta con Keycloak y Booking: reserva retenida/confirmada en gris, vencida/rechazada libre y fallo de Booking sin disponibilidad falsa.
 
 El ticket permanece abierto hasta completar esa integración. El mock es una herramienta de desarrollo, no evidencia de que el flujo real esté terminado.

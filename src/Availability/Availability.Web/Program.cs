@@ -14,13 +14,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
-// Web conecta las implementaciones del catálogo y del envío de solicitudes.
-builder.Services.AddInfrastructure(
-    builder.Configuration.GetConnectionString("Availability"),
-    builder.Configuration["Broker:Provider"],
-    useFakeBookingClient: builder.Environment.IsDevelopment(),
-    serviceBusOptions: builder.Configuration.GetSection("Broker:AzureServiceBus").Get<AzureServiceBusPublisherOptions>());
-builder.Services.AddScoped<ReservationRequestHandler>();
 var querySource = builder.Configuration["EventQueries:Source"] ?? "Database";
 if (querySource != "Demo" && querySource != "Database")
 {
@@ -32,6 +25,15 @@ if (useDemoData && !builder.Environment.IsDevelopment())
     throw new InvalidOperationException("El modo Demo solo está permitido en Development.");
 }
 var bookingOptions = builder.Configuration.GetSection("Booking").Get<BookingQueryOptions>() ?? new BookingQueryOptions();
+// Web conecta las implementaciones del catálogo y del envío de solicitudes.
+builder.Services.AddInfrastructure(
+    builder.Configuration.GetConnectionString("Availability"),
+    builder.Configuration["Broker:Provider"],
+    useFakeBookingClient: builder.Environment.IsDevelopment(),
+    serviceBusOptions: builder.Configuration.GetSection("Broker:AzureServiceBus").Get<AzureServiceBusPublisherOptions>(),
+    // Demo mode never calls Booking, so the real status client is not offered there.
+    bookingOptions: useDemoData ? null : bookingOptions);
+builder.Services.AddScoped<ReservationRequestHandler>();
 builder.Services.AddEventQueries(useDemoData, bookingOptions);
 builder.Services.AddSingleton(new EventDisplayOptions(useDemoData));
 builder.Services.AddScoped<ReservationStatusHandler>();

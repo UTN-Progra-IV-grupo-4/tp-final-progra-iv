@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using ServiceAuthentication;
 
 namespace Availability.Tests;
 
@@ -45,15 +46,8 @@ public sealed class BookingOccupancyEndpointTests(WebApplicationFactory<Program>
                 // Se aísla el catálogo; sí se ejecutan el cliente HTTP y el pipeline MVC reales.
                 services.RemoveAll<IEventCatalog>();
                 services.AddScoped<IEventCatalog, InMemoryEventCatalog>();
-                services.RemoveAll<IBookingServiceTokenProvider>();
-                if (hasToken)
-                {
-                    services.AddScoped<IBookingServiceTokenProvider, FixedBookingTokenProvider>();
-                }
-                else
-                {
-                    services.AddScoped<IBookingServiceTokenProvider, PendingBookingServiceTokenProvider>();
-                }
+                services.RemoveAll<IServiceTokenProvider>();
+                services.AddSingleton<IServiceTokenProvider>(new FakeServiceTokenProvider(hasToken ? "test-service-token" : null));
                 services.AddHttpClient<ISeatOccupancyQuery, BookingSeatOccupancyQuery>()
                     .ConfigurePrimaryHttpMessageHandler(() => handler);
             });

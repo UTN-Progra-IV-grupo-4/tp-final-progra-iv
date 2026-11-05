@@ -92,10 +92,8 @@ public class BookingSeatOccupancyQueryTests
     public async Task MissingServiceToken_DoesNotSendAnAnonymousRequest()
     {
         using var handler = JsonResponse(new { eventId = EventId, seatIds = Array.Empty<Guid>() });
-        using var http = CreateHttp(handler);
-        var query = new BookingSeatOccupancyQuery(http, new PendingBookingServiceTokenProvider(),
-            NullLogger<BookingSeatOccupancyQuery>.Instance);
-        Assert.False((await query.GetOccupiedSeatsAsync(EventId, default)).IsConfirmed);
+        using var http = CreateHttp(handler, new FakeServiceTokenProvider(token: null));
+        Assert.False((await CreateQuery(http).GetOccupiedSeatsAsync(EventId, default)).IsConfirmed);
         Assert.Equal(0, handler.Calls);
     }
 
@@ -135,10 +133,10 @@ public class BookingSeatOccupancyQueryTests
     }
 
     private static BookingSeatOccupancyQuery CreateQuery(HttpClient client)
-        => new(client, new FixedBookingTokenProvider(), NullLogger<BookingSeatOccupancyQuery>.Instance);
+        => new(client, NullLogger<BookingSeatOccupancyQuery>.Instance);
 
-    private static HttpClient CreateHttp(HttpMessageHandler handler)
-        => new(handler) { BaseAddress = new Uri("http://booking.test/prefix/") };
+    private static HttpClient CreateHttp(HttpMessageHandler handler, FakeServiceTokenProvider? tokenProvider = null)
+        => BookingHttpTestFactory.CreateClient(handler, tokenProvider ?? new FakeServiceTokenProvider());
 
     private static BookingResponseHandler JsonResponse(object data)
         => new((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)

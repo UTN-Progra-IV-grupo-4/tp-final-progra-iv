@@ -1,12 +1,20 @@
-using Availability.Infrastructure.Booking;
+using ServiceAuthentication;
 
 namespace Availability.Tests;
 
-// Credencial inventada y exclusiva de tests; no se usa contra Keycloak ni Booking real.
-internal sealed class FixedBookingTokenProvider : IBookingServiceTokenProvider
+// Invented credential used only by tests; it is never sent to a real Keycloak or Booking.
+internal sealed class FakeServiceTokenProvider(string? token = "test-service-token") : IServiceTokenProvider
 {
-    public Task<string?> GetAccessTokenAsync(CancellationToken cancellationToken)
-        => Task.FromResult<string?>("test-service-token");
+    public int Calls { get; private set; }
+
+    // A null token simulates Keycloak being unreachable or the secret being wrong.
+    public Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        Calls++;
+        return token is null
+            ? Task.FromException<string>(new ServiceTokenAcquisitionException("No service token available."))
+            : Task.FromResult(token);
+    }
 }
 
 internal sealed class BookingResponseHandler(
@@ -23,4 +31,16 @@ internal sealed class BookingResponseHandler(
         Authorization = request.Headers.Authorization?.ToString();
         return respond(request, cancellationToken);
     }
+}
+
+internal static class BookingHttpTestFactory
+{
+    // Same pipeline as production for the service token: the shared bearer handler in front of the stub.
+    public static HttpClient CreateClient(HttpMessageHandler booking, IServiceTokenProvider tokenProvider,
+        string baseAddress = "http://booking.test/prefix/", TimeSpan? timeout = null)
+        => new(new BearerTokenHandler(tokenProvider) { InnerHandler = booking })
+        {
+            BaseAddress = new Uri(baseAddress),
+            Timeout = timeout ?? TimeSpan.FromSeconds(2)
+        };
 }

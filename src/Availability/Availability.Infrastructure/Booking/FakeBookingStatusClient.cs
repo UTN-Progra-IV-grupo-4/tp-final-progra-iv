@@ -1,6 +1,6 @@
 using Availability.Application.Abstractions;
 namespace Availability.Infrastructure.Booking;
-// Temporary stand-in for Booking until the real HTTP client against #21 exists.
+// Development stand-in used only when Booking:BaseUrl is not configured (the real BookingStatusClient otherwise).
 // Picks a result from the request id so every case can be seen:
 // processing (404), Retained, Confirmed, Rejected and Expired.
 public class FakeBookingStatusClient : IBookingStatusClient

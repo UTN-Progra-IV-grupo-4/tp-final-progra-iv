@@ -4,18 +4,15 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Availability.Application.Events;
 using Microsoft.Extensions.Logging;
+using ServiceAuthentication;
 
 namespace Availability.Infrastructure.Booking;
 
 // Implementa únicamente el contrato HTTP del #21. Booking decide cuáles reservas ocupan.
 public class BookingSeatOccupancyQuery(
     HttpClient httpClient,
-    IBookingServiceTokenProvider tokenProvider,
     ILogger<BookingSeatOccupancyQuery> logger) : ISeatOccupancyQuery
 {
-    // El token pendiente se repite en cada visita pública: Warning solo la primera vez por proceso.
-    private static int pendingTokenWarningLogged;
-
     public async Task<SeatOccupancy> GetOccupiedSeatsAsync(Guid eventId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -30,23 +27,7 @@ public class BookingSeatOccupancyQuery(
         timeout.CancelAfter(httpClient.Timeout);
         try
         {
-            var token = await tokenProvider.GetAccessTokenAsync(timeout.Token);
-            if (string.IsNullOrWhiteSpace(token) || token.Any(char.IsWhiteSpace))
-            {
-                const string message = "Ocupación sin confirmar: no hay token de availability-service. Integración pendiente del #11.";
-                if (Interlocked.Exchange(ref pendingTokenWarningLogged, 1) == 0)
-                {
-                    logger.LogWarning(message);
-                }
-                else
-                {
-                    logger.LogDebug(message);
-                }
-                return Unknown(eventId);
-            }
-
             using var request = new HttpRequestMessage(HttpMethod.Get, $"api/events/{eventId:D}/occupied-seats");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             using var response = await httpClient.SendAsync(request, timeout.Token);
             if (response.StatusCode != HttpStatusCode.OK)
@@ -78,6 +59,12 @@ public class BookingSeatOccupancyQuery(
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning("Se agotó el tiempo para consultar la ocupación de Booking.");
+            return Unknown(eventId);
+        }
+        catch (ServiceTokenAcquisitionException)
+        {
+            // The token comes from the shared handler, which refuses to send the request without one.
+            logger.LogWarning("Ocupación sin confirmar: no hay token de availability-service.");
             return Unknown(eventId);
         }
         catch (HttpRequestException)

@@ -8,6 +8,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Availability.Application\Availability.Application.csproj" />
     <ProjectReference Include="..\Availability.Domain\Availability.Domain.csproj" />
+    <!-- Service token (client credentials) attached to the calls to Booking. -->
+    <ProjectReference Include="..\..\ServiceAuthentication\ServiceAuthentication.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.21.0" />
