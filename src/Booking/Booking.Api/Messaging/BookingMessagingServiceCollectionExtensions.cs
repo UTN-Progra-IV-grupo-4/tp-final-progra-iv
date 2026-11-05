@@ -1,5 +1,7 @@
 using Booking.Business.Payments;
 using Booking.Business.Reservations;
+using Booking.Api.Payments;
+using Contracts.Payment;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -33,9 +35,26 @@ internal static class BookingMessagingServiceCollectionExtensions
                 (options, serviceProviderIsService) =>
                     !options.Enabled ||
                     serviceProviderIsService.IsService(typeof(IPaymentChargeClient)),
-                "When Payment:Enabled is true, an IPaymentChargeClient must be registered. The gRPC adapter is still pending, so keep Payment:Enabled false until it exists.")
+                "When Payment:Enabled is true, an IPaymentChargeClient must be registered.")
             .ValidateOnStart();
         services.Configure<PaymentConsumerOptions>(configuration.GetSection("Payment"));
+
+        services
+            .AddOptions<PaymentGrpcOptions>()
+            .Bind(configuration.GetSection("Payment"))
+            .Validate(
+                options => !configuration.GetValue<bool>("Payment:Enabled") || options.HasValidAddress(),
+                "Payment:Address must be an absolute HTTP or HTTPS URL when payment is enabled.")
+            .ValidateOnStart();
+
+        if (configuration.GetValue<bool>("Payment:Enabled"))
+        {
+            // The generated client and its adapter are registered together. An enabled consumer
+            // cannot start processing messages without an IPaymentChargeClient.
+            services.AddGrpcClient<PaymentService.PaymentServiceClient>(options =>
+                options.Address = new Uri(configuration["Payment:Address"]!));
+            services.AddScoped<IPaymentChargeClient, GrpcPaymentChargeClient>();
+        }
 
         services.AddSingleton<ReservationRequestMapper>();
         services.AddSingleton<IReservationRequestMessageHandler, ReservationRequestMessageHandler>();
