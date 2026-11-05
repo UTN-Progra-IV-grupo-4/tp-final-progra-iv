@@ -67,7 +67,7 @@ Los dos clientes HTTP hacia Booking (ocupación de asientos, #13, y estado de la
 
 ### Uso desde Booking
 
-Cuando exista el cliente gRPC de Payment (#24):
+El cliente gRPC de Payment (#19, PR #53) se registra así:
 
 ```csharp
 builder.Services

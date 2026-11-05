@@ -11,9 +11,9 @@ Availability genera el id de la solicitud y lo usa como `MessageId`, como `corre
 | Usuario a Availability | HTTP | no lo manda: Availability lo genera | Implementado. |
 | Availability a Booking (mensaje) | Broker | `correlationId` del cuerpo y `CorrelationId` del mensaje de Service Bus | Implementado. Booking lo valida (hasta 64 caracteres ASCII: letras, dígitos, `-`, `_`, `.`) y rechaza a dead-letter el inválido. |
 | Booking a Payment | gRPC | metadata `x-correlation-id` | Implementado. Payment lo agrega a sus logs, o lo registra como `invalido`. |
-| Availability a Booking (consulta de estado) | HTTP | cabecera `x-correlation-id` con el id de la solicitud | **Pendiente**: la agrega el ticket #24, con el PR abierto y todavía sin integrar en `develop`. |
+| Availability a Booking (consulta de estado) | HTTP | cabecera `x-correlation-id` con el id de la solicitud | Implementado (ticket #24). Si el valor no es válido, Booking lo sanea y usa `invalido`. |
 
-Los eventos de auditoría con id numérico fijo (1001 a 1003 en Availability, 2001 a 2012 en Booking, 3001 a 3004 en Payment) también pertenecen al ticket #24 y están descritos en `docs/24-logs-de-auditoria.md` de esa rama. En `develop` ya existen logs estructurados con `MessageId`, `RequestId`, `CorrelationId` y `ErrorCode` en Booking, pero sin esos ids. Los diagramas los nombran entre paréntesis, marcados como "ticket 24".
+Los eventos de auditoría tienen un id numérico fijo (1001 a 1003 en Availability, 2001 a 2020 en Booking, 3001 a 3004 en Payment) y están descritos en `docs/24-logs-de-auditoria.md`. Los diagramas los nombran entre paréntesis.
 
 ## (a) Camino feliz
 
@@ -51,19 +51,19 @@ sequenceDiagram
     avail->>avail: guarda reservation_requests, el id es el requestId y el correlationId
     avail->>bus: publica ReservationRequestMessage (MessageId y correlationId = requestId)
     avail-->>user: 303 a /reservas/{requestId}/recibida (la API responde 202)
-    Note over avail,book: Consistencia eventual: el asiento sigue figurando libre hasta que Booking procese el mensaje (ticket 24: eventos 1001 y 1002)
+    Note over avail,book: Consistencia eventual: el asiento sigue figurando libre hasta que Booking procese el mensaje (eventos 1001 y 1002)
 
     Note over bus,pay: Procesamiento asíncrono en Booking
     bus->>book: entrega el mensaje (AMQP, una sola réplica)
     book->>bookdb: INSERT Retained con ExpiresAt a 10 minutos
-    Note over book,bookdb: el índice único parcial por evento y asiento da un solo ganador (ticket 24: evento 2001)
+    Note over book,bookdb: el índice único parcial por evento y asiento da un solo ganador (evento 2001)
     book->>pay: gRPC Charge(reservation_id, amount_cents, currency)
     Note over book,pay: token booking-service en Authorization y correlationId en la metadata x-correlation-id
     pay->>pay: guarda el cobro Pending, la pasarela simulada aprueba y lo marca Approved
     pay-->>book: OK con APPROVED y charge_id
     book->>bookdb: UPDATE a Confirmed solo si sigue Retained y no venció
     book->>bus: complete del mensaje
-    Note over book,pay: ticket 24: eventos 2010, 2011 y 2002 en Booking, 3001 y 3002 en Payment
+    Note over book,pay: eventos 2010, 2011 y 2002 en Booking, 3001 y 3002 en Payment
 
     Note over user,book: Página de estado con polling cada 3 s, hasta 2 min
     loop mientras figure Procesando o Retenida
@@ -177,4 +177,4 @@ Notas:
 - `docs/contracts/` (`reservation-request.md`, `reservation-status.md`, `occupied-seats.md`, `payment.md`).
 - `docs/booking/consumer.md`, `docs/booking/payment-client.md`, `docs/booking/payment-dlq-review.md`.
 - `docs/14-autenticacion-usuarios-availability.md` y `docs/11-Autenticacion-entre-servicios.md`.
-- `docs/24-logs-de-auditoria.md`: solo existe en la rama `24-audit-logs-correlation-id` (PR abierto), no en `develop`.
+- `docs/24-logs-de-auditoria.md`: eventos de auditoría, flujo del correlation id y cómo seguir una reserva por los tres servicios.
