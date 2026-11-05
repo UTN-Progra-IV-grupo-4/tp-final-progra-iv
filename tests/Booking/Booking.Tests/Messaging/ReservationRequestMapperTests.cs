@@ -140,6 +140,114 @@ public sealed class ReservationRequestMapperTests
         Assert.Equal(ReservationRequestMappingErrorCodes.CorrelationIdRequired, result.ErrorCode);
     }
 
+    [Fact]
+    public void Map_WhenBodyIsSerializedAsAvailabilityPublishesIt_ReturnsBusinessCommand()
+    {
+        var requestId = Guid.NewGuid();
+        var eventId = Guid.NewGuid();
+        var seatId = Guid.NewGuid();
+        var published = new ReservationRequestMessage
+        {
+            MessageId = requestId,
+            CorrelationId = requestId.ToString(),
+            EventId = eventId,
+            SeatId = seatId,
+            UserId = "user-42",
+            RequestedAt = DateTimeOffset.UtcNow.UtcDateTime
+        };
+        var body = BinaryData.FromString(JsonSerializer.Serialize(published));
+        var delivery = new ReservationRequestDelivery(
+            body,
+            requestId.ToString(),
+            requestId.ToString(),
+            null);
+
+        var result = mapper.Map(delivery);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(requestId, result.Request!.RequestId);
+        Assert.Equal(eventId, result.Request.EventId);
+        Assert.Equal(seatId, result.Request.SeatId);
+    }
+
+    [Fact]
+    public void Map_WhenBodyIsTheDocumentedContractExample_ReturnsBusinessCommand()
+    {
+        var delivery = new ReservationRequestDelivery(
+            BinaryData.FromString(
+                """
+                {
+                  "messageId": "7b2f0c31-9d3a-4a4f-8d2e-0f6b11f5a245",
+                  "correlationId": "req-2026-10-31-001",
+                  "eventId": "8cc3b719-4866-4f8b-a893-6db7d0f18b55",
+                  "seatId": "1cf6fb92-e01e-4d7c-8935-14a42f8fd17a",
+                  "userId": "user-42",
+                  "requestedAt": "2026-10-31T12:00:00Z"
+                }
+                """),
+            "7b2f0c31-9d3a-4a4f-8d2e-0f6b11f5a245",
+            "req-2026-10-31-001",
+            null);
+
+        var result = mapper.Map(delivery);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(Guid.Parse("7b2f0c31-9d3a-4a4f-8d2e-0f6b11f5a245"), result.Request!.RequestId);
+        Assert.Equal(Guid.Parse("8cc3b719-4866-4f8b-a893-6db7d0f18b55"), result.Request.EventId);
+        Assert.Equal(Guid.Parse("1cf6fb92-e01e-4d7c-8935-14a42f8fd17a"), result.Request.SeatId);
+    }
+
+    [Fact]
+    public void Map_WhenBodyHasUnknownProperties_IgnoresThem()
+    {
+        var requestId = Guid.NewGuid();
+        var delivery = new ReservationRequestDelivery(
+            BinaryData.FromString(
+                $$"""
+                {
+                  "messageId": "{{requestId}}",
+                  "correlationId": "{{requestId}}",
+                  "eventId": "{{Guid.NewGuid()}}",
+                  "seatId": "{{Guid.NewGuid()}}",
+                  "userId": "user-42",
+                  "requestedAt": "2026-10-31T12:00:00Z",
+                  "futureField": { "nested": true }
+                }
+                """),
+            requestId.ToString(),
+            requestId.ToString(),
+            null);
+
+        Assert.True(mapper.Map(delivery).IsValid);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("\"text\"")]
+    [InlineData("")]
+    [InlineData("{\"messageId\":\"not-a-guid\"}")]
+    [InlineData("{\"MessageId\":\"7b2f0c31-9d3a-4a4f-8d2e-0f6b11f5a245\"}")]
+    public void Map_WhenBodyIsNotAContractObject_ReturnsInvalidJsonOrRequiredIdentifier(string body)
+    {
+        var delivery = new ReservationRequestDelivery(
+            BinaryData.FromString(body),
+            Guid.NewGuid().ToString(),
+            null,
+            null);
+
+        var result = mapper.Map(delivery);
+
+        Assert.False(result.IsValid);
+        Assert.Contains(
+            result.ErrorCode,
+            new[]
+            {
+                ReservationRequestMappingErrorCodes.InvalidJson,
+                ReservationRequestMappingErrorCodes.PayloadMessageIdRequired
+            });
+    }
+
     private static ReservationRequestDelivery CreateDelivery(
         Guid requestId,
         Guid eventId,
