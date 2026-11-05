@@ -93,6 +93,17 @@ Fue la parte más constante de mi trabajo: revisar los PRs del equipo, dejar com
 - «Mergeá la PR del CI y fijate si podemos sacar a prod.»
 - «Acomodemos los tickets en sus columnas.» / «Acomodemos los tickets que sigan diciendo bloqueados aunque no lo estén.»
 
+## 9. Release a main (05/11)
+
+- «¿Cuando salgan estos dos tickets podemos probar todo el flujo y sacar a prod?»
+- «Tenemos que cerrar antes del release, sí o sí, los que todavía no se pueden cerrar, pero primero esperemos a 59 y 60.»
+- «Las decisiones del equipo son nuestras principalmente, así que cerrate los que ya están.»
+- «Vamos a tener que meter nosotros los tickets que faltan. Hagamos nosotros la conexión de los 3 tickets, vos decidís la rama.»
+- «No esperes decisiones del equipo porque estamos cortos de tiempo: vamos de una con lo que te parezca más razonable, preguntame antes.»
+- «¿Qué es más urgente?»
+- «Vamos a agregar unos últimos prompts para el último release a prod.»
+- **Contexto:** se cerraron los tickets terminados con su evidencia, se probó el flujo completo y se armó el PR de release de `develop` a `main`.
+
 ## Estado al compartir
 
-El repositorio tiene CI en cada PR, el tablero refleja el estado de los tickets y los PRs se revisaron y mergearon en orden. El detalle técnico de cada componente está en el historial del repositorio y en `docs/`.
+El repositorio tiene CI en cada PR, el tablero refleja el estado de los tickets, los PRs se revisaron y mergearon en orden y el release a `main` está preparado. El detalle técnico de cada componente está en el historial del repositorio y en `docs/`.
