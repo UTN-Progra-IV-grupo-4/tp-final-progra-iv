@@ -27,7 +27,7 @@ public class SimulatedPaymentGateway(IOptions<SimulatedGatewayOptions> options) 
                 throw new HttpRequestException("Error simulado de la pasarela de pago.");
 
             default:
-                // No InvalidOperationException: la capa gRPC la reserva para el cobro en curso (ABORTED).
+                // La capa gRPC la responde INTERNAL: reintentar no arregla la configuración.
                 // Un modo desconocido es un error de configuración y nunca debe terminar en un aprobado.
                 throw new NotSupportedException($"Modo simulado desconocido: {_options.Mode}.");
         }

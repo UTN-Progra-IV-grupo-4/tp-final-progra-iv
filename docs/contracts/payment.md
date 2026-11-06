@@ -98,7 +98,7 @@ Si Payment se cae a mitad de un cobro, la fila queda `Pending` y nadie la termin
 
 ### Procedimiento de cotejo
 
-1. Booking registra "posible cobro tardío, resultado desconocido" cuando agota los reintentos con `UNAVAILABLE`, `DEADLINE_EXCEEDED` o `ABORTED`.
+1. Booking registra "posible cobro tardío, resultado desconocido" cuando termina sin resultado y algún intento quedó sin respuesta (`UNAVAILABLE` o `DEADLINE_EXCEEDED`). `ABORTED` no lo marca por sí solo, porque Payment respondió: si todos los intentos dieron `ABORTED`, el caso queda en la DLQ con el motivo `PaymentPending`, sin ese log.
 2. El responsable de Payment consulta la tabla de cobros por `reservation_id`.
 3. Si el cobro está `Approved` y la reserva está `Rejected` o `Expired`, se inicia el reembolso manual y se registra el caso.
 4. Si el cobro está `Failed` o `Pending`, no hay cargo que revertir.
@@ -197,7 +197,7 @@ sequenceDiagram
 2. Error técnico de la pasarela y base caída: `UNAVAILABLE`, que Booking reintenta.
 3. El "posible cobro tardío" queda en los logs de Booking (`ErrorCode=PaymentOutcomeUnknown`); el cotejo sigue la sección 6.
 4. `INVALID_ARGUMENT`: DLQ y revisión manual.
-5. Deadline gRPC de Booking: 5 s propuestos, configurable. Tiene que ser menor que `SlowDelaySeconds` para que el modo `Slow` provoque el timeout. Pendiente de implementar en el adaptador de Booking.
+5. Deadline gRPC de Booking: 5 s por defecto, configurable con `Payment:Deadline`. Tiene que ser menor que `SlowDelaySeconds` para que el modo `Slow` provoque el timeout; ningún servicio lo comprueba al arrancar.
 
 ## 11. Historial
 
@@ -207,3 +207,4 @@ sequenceDiagram
 | 2026-11-04 | El error técnico de la pasarela y la base caída responden `UNAVAILABLE` (antes `INTERNAL`). Se documentan `INTERNAL`, `UNKNOWN` y lo que queda fuera de alcance. El documento pasa a `docs/contracts/`. |
 | 2026-11-04 | Un cobro `Pending` abandonado se reclama después de `Charge:PendingTimeoutSeconds`. Columna `claimed_at` como token de concurrencia. |
 | 2026-11-04 | Validaciones: monedas de `Charge:SupportedCurrencies`, tope `Charge:MaxAmountCents`, `reservation_id` solo en formato `D` y límites de `x-correlation-id`. |
+| 2026-11-06 | Se alinea con el código: el deadline de Booking ya está implementado y `ABORTED` por sí solo no registra "posible cobro tardío". |

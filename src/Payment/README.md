@@ -9,27 +9,30 @@ Todos los comandos se ejecutan desde la **raíz del repositorio**, no desde esta
 | Herramienta | Para qué | Instalación |
 |---|---|---|
 | .NET SDK 10 | Compilar y ejecutar | La versión está fijada en `global.json` |
-| Docker Desktop | PostgreSQL | Tiene que estar abierto antes de empezar |
+| Docker Desktop | PostgreSQL y Keycloak | Tiene que estar abierto antes de empezar |
 | dotnet-ef 10.0.14 | Migraciones | `dotnet tool install --global dotnet-ef --version 10.0.14` |
 | grpcurl | Llamar al servicio como si fuera Booking | `winget install --id fullstorydev.grpcurl -e` |
 
 Después de instalar con `winget` o `dotnet tool`, abrí una terminal nueva para que se actualice el `PATH`.
 
-## 2. Levantar PostgreSQL
+## 2. Levantar PostgreSQL y Keycloak
 
-1. Copiá `.env.example` a `.env` en la raíz del repositorio y completá las variables de PostgreSQL. El script de inicialización exige **las nueve** variables `AVAILABILITY_DB_*`, `BOOKING_DB_*` y `PAYMENT_DB_*`. Si falta alguna, el contenedor no termina de iniciar. El `.env` no se sube al repositorio.
+Payment solo acepta llamadas con un token de `booking-service`, así que Keycloak es necesario aunque Booking no esté corriendo.
+
+1. Copiá `.env.example` a `.env` en la raíz del repositorio y completá las variables de PostgreSQL y Keycloak. El script de inicialización exige **las nueve** variables `AVAILABILITY_DB_*`, `BOOKING_DB_*` y `PAYMENT_DB_*`. Si falta alguna, el contenedor no termina de iniciar. El `.env` no se sube al repositorio.
 
    ```dotenv
    POSTGRES_PORT=5432
    PAYMENT_DB_NAME=payment_db
    PAYMENT_DB_USER=payment_user
    PAYMENT_DB_PASSWORD=<una contraseña local>
+   KEYCLOAK_BOOKING_CLIENT_SECRET=<un secreto local>
    ```
 
-2. Desde la raíz del repositorio, levantá solo PostgreSQL:
+2. Desde la raíz del repositorio, levantá PostgreSQL y Keycloak:
 
    ```bash
-   docker compose up -d postgres-db
+   docker compose up -d postgres-db keycloak
    ```
 
 3. Verificá que se crearon las bases:
@@ -78,6 +81,8 @@ Tiene que aparecer `"IX_charges_reservation_id" UNIQUE, btree (reservation_id)`.
 dotnet run --project src/Payment/Payment.Grpc --launch-profile http
 ```
 
+El perfil `http` usa el entorno `Development`, donde `appsettings.Development.json` apunta a Keycloak en `http://localhost:8080/realms/seat-reservation`. Si cambiaste `KEYCLOAK_PORT`, indicá la dirección con la variable `Authentication__Authority`. Fuera de `Development`, sin esa variable Payment arranca con una advertencia y rechaza todas las llamadas.
+
 ### Elegir el modo de la pasarela simulada
 
 El resultado lo decide `SimulatedGateway:Mode`, no el monto. Para cambiarlo, configurá la variable de entorno y **reiniciá solo Payment**:
@@ -107,10 +112,33 @@ Un valor de modo que no existe frena el arranque, por `ValidateOnStart`.
 
 Payment no expone reflexión, así que grpcurl lee el contrato desde `src/Contracts/Protos`. Ejecutá los comandos desde la raíz del repositorio.
 
+### Obtener el token
+
+Cada llamada necesita un token de `booking-service`, emitido con *client credentials*. Usá el valor de `KEYCLOAK_BOOKING_CLIENT_SECRET` de tu `.env`. El token vence: si una llamada que funcionaba empieza a responder `Unauthenticated`, pedí otro.
+
+**Git Bash:**
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token \
+  -d grant_type=client_credentials -d client_id=booking-service \
+  -d client_secret=<KEYCLOAK_BOOKING_CLIENT_SECRET> | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+```
+
+**PowerShell:**
+
+```powershell
+$token = (Invoke-RestMethod -Method Post `
+  -Uri "http://localhost:8080/realms/seat-reservation/protocol/openid-connect/token" `
+  -Body @{ grant_type = "client_credentials"; client_id = "booking-service"; client_secret = "<KEYCLOAK_BOOKING_CLIENT_SECRET>" }).access_token
+```
+
+### Hacer la llamada
+
 **Git Bash:**
 
 ```bash
 grpcurl -plaintext -import-path src/Contracts/Protos -proto payment.proto \
+  -H "Authorization: Bearer $TOKEN" \
   -H 'x-correlation-id: demo-1' \
   -d '{"reservation_id":"11111111-1111-4111-8111-000000000001","amount_cents":150000,"currency":"ARS"}' \
   localhost:5183 payment.PaymentService/Charge
@@ -121,6 +149,7 @@ grpcurl -plaintext -import-path src/Contracts/Protos -proto payment.proto \
 ```powershell
 '{"reservation_id":"11111111-1111-4111-8111-000000000001","amount_cents":150000,"currency":"ARS"}' |
   grpcurl -plaintext -import-path src/Contracts/Protos -proto payment.proto `
+  -H "Authorization: Bearer $token" `
   -H "x-correlation-id: demo-1" -d '@' localhost:5183 payment.PaymentService/Charge
 ```
 
@@ -139,7 +168,7 @@ En la consola de Payment, cada log del cobro muestra el scope `=> CorrelationId:
 
 ## 7. Casos de prueba
 
-Usá un `reservation_id` nuevo por caso, salvo cuando el caso es justamente reintentar. Un GUID es válido con cualquier contenido; por ejemplo, `22222222-2222-4222-8222-000000000001`.
+Todas las llamadas llevan el token de la sección 6, salvo el caso 15. Usá un `reservation_id` nuevo por caso, salvo cuando el caso es justamente reintentar. Un GUID es válido con cualquier contenido; por ejemplo, `22222222-2222-4222-8222-000000000001`.
 
 | # | Modo | Pedido | Resultado esperado |
 |---|---|---|---|
@@ -157,6 +186,7 @@ Usá un `reservation_id` nuevo por caso, salvo cuando el caso es justamente rein
 | 12 | `Slow` y después `Approve` | Detené Payment a mitad de un cobro `Slow`, arrancalo en `Approve` y repetí el pedido | Antes de 60 s: `Aborted` (la fila sigue `Pending`). Después de 60 s: `APPROVED` con el mismo `chargeId`, y el log muestra "Cobro Pending abandonado" |
 | 13 | cualquiera | `amount_cents: 100000001`, o un `reservation_id` con llaves `{...}` | `InvalidArgument`. No se crea ninguna fila |
 | 14 | `Approve` | Id nuevo con un `x-correlation-id` de más de 64 caracteres | `APPROVED`. El log muestra `CorrelationId:invalido` |
+| 15 | cualquiera | Sin el header `Authorization` | `Unauthenticated`. El pedido no llega al servicio y no se crea ninguna fila |
 
 ### Caso `Slow`: el reintento de Booking
 
@@ -204,4 +234,5 @@ docker compose exec -T postgres-db psql -U postgres -d payment_db \
 | El contenedor se reinicia o el log dice `variable ... is required` | Falta alguna de las nueve variables de bases en el `.env` | Completalas y recreá el volumen |
 | `grpcurl: command not found` | El `PATH` no se actualizó | Abrí una terminal nueva |
 | `Failed to dial target host "localhost:5183"` | Payment no está corriendo, o arrancó con el perfil `https` | Arrancalo con el perfil `http` |
+| `Unauthenticated` en grpcurl | Falta el token, venció, o Payment no tiene `Authentication:Authority` | Pedí otro token (sección 6) y revisá que Keycloak esté corriendo |
 | Los logs no muestran `CorrelationId` | Falta `Logging:Console:FormatterName` o `IncludeScopes` | Revisá `appsettings.json` de Payment.Grpc |

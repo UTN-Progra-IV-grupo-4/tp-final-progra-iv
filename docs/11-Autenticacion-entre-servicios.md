@@ -82,8 +82,9 @@ TOKEN=$(curl -s -X POST http://localhost:8080/realms/seat-reservation/protocol/o
   -d grant_type=client_credentials -d client_id=booking-service \
   -d client_secret=<KEYCLOAK_BOOKING_CLIENT_SECRET> | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
 
-grpcurl -plaintext -H "Authorization: Bearer $TOKEN" -d '{}' \
-  localhost:5088 payment.PaymentService/Charge
+grpcurl -plaintext -import-path src/Contracts/Protos -proto payment.proto \
+  -H "Authorization: Bearer $TOKEN" -d '{}' \
+  localhost:5183 payment.PaymentService/Charge
 ```
 
 Resultado esperado: con el token de `booking-service` el pedido llega al servicio (`INVALID_ARGUMENT` por el cuerpo vacío); sin token o con el de `availability-service` o `payment-service`, `UNAUTHENTICATED`.
