@@ -31,7 +31,7 @@ Para repetir el recorrido sin cerrar el navegador, tocar "Logout" (cierra tambi�
 
 1. Detener Payment (Ctrl+C en su terminal).
 2. Reservar otro asiento (por ejemplo A2) con el mismo recorrido.
-3. En la página de estado: Procesando (o Retenida) y, tras los tres intentos de cobro, **Rechazada: "El servicio de pagos no estaba disponible."** Medido en Windows: unos 11 s entre el pedido y el rechazo en Booking (cada intento tarda unos 4 s en fallar), 12 s en pantalla con la consulta cada 3 s. En las consolas, Booking imprime por cada intento un stack trace de `SocketException` y el warning 2004 "Possible late payment": es esperado, avisalo.
+3. En la página de estado: Procesando (o Retenida) y, tras los tres intentos de cobro, **Rechazada: "El servicio de pagos no estaba disponible."** Medido en Windows: unos 11 s entre el pedido y el rechazo en Booking (cada intento tarda unos 4 s en fallar), 12 s en pantalla con la consulta cada 3 s. En las consolas, Booking registra el evento 2012 (`ErrorCode=Unavailable`) por cada intento y el warning 2004 "Possible late payment": es esperado, avisalo. Ya no imprime el stack trace de `SocketException` (ver "Ruido esperado en las consolas").
 4. El asiento A2 queda libre: la reserva rechazada no lo ocupa.
 
 Alternativa sin detener nada: arrancar Payment con `SimulatedGateway__Mode=Decline`. El resultado es **Rechazada: "El pago fue rechazado."**, en unos 3 s.

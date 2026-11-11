@@ -219,7 +219,7 @@ Debe devolver `0|2|40`. Después, el mapa de asientos vuelve a mostrar todo libr
 | Booking no arranca en Development con `Payment__Enabled=false` | Ya corregido en `develop` (#57). Actualizá tu rama. |
 | Toda reserva termina "El servicio de pagos no estaba disponible" | Booking no puede obtener su token (revisá `ServiceCredentials__*` y que Keycloak esté arriba) o no llega a Payment (`Payment__Address`). Mirá el log de Booking: el evento 2012 trae el código. |
 | Payment responde `UNAUTHENTICATED` | Payment no tiene `Authentication__Authority`, o el token de Booking no es de `booking-service`. |
-| Payment responde `PERMISSION_DENIED` | El token es válido pero de otro client (Payment solo acepta `booking-service`). |
+| Payment responde `PERMISSION_DENIED` | El token tiene la audiencia de Payment pero lo pidió otro client (Payment solo acepta `booking-service`). Con el token de `availability-service` responde `UNAUTHENTICATED`, porque la audiencia se valida antes que el client. |
 | El login de Keycloak pide completar el perfil | Tu volumen de Keycloak es anterior a #60. Recrealo con `docker compose down -v`. |
 | Keycloak dice que el redirect no es válido | Corré Availability en el puerto 5212 (o 7057 con HTTPS), que son los que permite el realm. |
 | Keycloak o Booking rechazan el secreto del client (401) | El `ServiceCredentials__ClientSecret` no es igual al `KEYCLOAK_*_CLIENT_SECRET` con el que se importó el realm. Si lo cambiaste, recreá el volumen. |
