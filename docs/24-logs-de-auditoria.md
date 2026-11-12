@@ -46,10 +46,11 @@ La hora UTC la imprime el formateador de consola (`TimestampFormat` y `UseUtcTim
 | Id | Evento | Cuándo | Campos |
 | --- | --- | --- | --- |
 | 1001 | `ReservationRequestStored` | Inicio de la cadena: la solicitud pasó la validación y se guardó | `Service`, `RequestId`, `CorrelationId`, `EventId`, `SeatId` |
-| 1002 | `ReservationRequestPublished` | El broker aceptó el mensaje (sin broker configurado lo emite `LoggingMessagePublisher` con otro texto) | `Service`, `MessageId`, `CorrelationId` |
+| 1002 | `ReservationRequestPublished` | El broker aceptó el mensaje (sin broker configurado lo emite `LoggingMessagePublisher` con otro texto) | `Service`, `MessageId`, `CorrelationId`, `PublisherHost` |
 | 1003 | `ReservationRequestPublishFailed` | El broker rechazó el mensaje y la solicitud guardada se eliminó (nivel Error) | `Service`, `RequestId`, `CorrelationId`, `ErrorCode=PublishFailed` |
+| 1004 | `ReservationRequestNotRegistered` | Booking sigue sin registrar la solicitud pasados 15 s: consulta de estado con Booking respondiendo "no existe" (nivel Warning, una vez por solicitud aproximadamente) | `Service`, `RequestId`, `CorrelationId`, `ElapsedSeconds` |
 
-El estado consultado por el usuario no genera eventos de auditoría (se consulta cada pocos segundos). Cuando Booking no responde ya se registra un warning con el `RequestId`, que es el correlation id.
+El estado consultado por el usuario no genera eventos de auditoría (se consulta cada pocos segundos), salvo el 1004. Cuando Booking no responde ya se registra un warning con el `RequestId`, que es el correlation id.
 
 ### Booking (2xxx)
 
@@ -64,9 +65,24 @@ El estado consultado por el usuario no genera eventos de auditoría (se consulta
 | 2002 | `ReservationMessageCompleted` | Fin en Booking: mensaje completado | `Service`, `MessageId`, `RequestId`, `CorrelationId`, `ReservationStatus`, `Result`, `ChargeId`, `SettlementAction` |
 | 2003 | `ReservationMessageDeadLettered` | Fin en Booking: mensaje a la dead-letter queue (nivel Warning) | `Service`, `MessageId`, `RequestId`, `CorrelationId`, `ReservationStatus`, `ChargeId`, `SettlementAction`, `ErrorCode` |
 | 2006 | `ReservationMessageFailed` | El procesamiento o el settlement falló y el broker va a reentregar | `MessageId`, `CorrelationId`, `ExceptionType` (sin mensaje de la excepción) |
+| 2007 | `ReservationMessageFromOtherHost` | Llegó un mensaje publicado desde **otra máquina** (nivel Warning; solo si el publicador envió `PublisherHost`) | `Service`, `MessageId`, `PublisherHost`, `ConsumerHost`, `Subscription` |
 | 2020 | `HttpRequestReceived` | Llegó un pedido HTTP (nivel **Debug**, apagado por defecto) | scope `Service` y `CorrelationId` |
 
 En 2002, `ReservationStatus` es el estado en que termina la reserva (`Confirmed`, `Rejected`, `Expired`, `Retained`; vacío si no se puede saber sin leer la base, por ejemplo una entrega duplicada) y `Result` es lo que lo decidió: el resultado del pago si hubo cobro (`Confirmed`, `PaymentFailed`, `PaymentUnavailable`, `Expired`...) o el del procesamiento (`SeatTaken`, `Retained`, `Duplicate`). Antes el log decía `Outcome: Retained; PaymentOutcome: PaymentFailed` para una reserva que terminaba rechazada.
+
+### Cuando una reserva se queda en "Procesando" (suscripción compartida)
+
+Los consumidores de una misma suscripción **compiten**: cada mensaje lo recibe uno solo. Si varias personas corren el proyecto contra el mismo tópico y la misma suscripción, el Booking de otra persona puede llevarse un mensaje tuyo y procesarlo en su base; a tu Availability nunca le llega la respuesta. Se reconoce así:
+
+- En Availability aparece `[1002]` (se publicó) y después `[1004]` (Booking no lo registró en 15 s).
+- En tu Booking **no** aparece `[2001]` para ese `MessageId`.
+- Si tu Booking se lleva un mensaje ajeno, deja `[2007]` con el `PublisherHost` de quien lo publicó; en la máquina del otro integrante se ve lo mismo con el tuyo.
+
+```powershell
+Select-String -Path .run\availability.out.log, .run\booking.out.log -Pattern "\[(1002|1004|2001|2007)\]"
+```
+
+`PublisherHost` viaja como propiedad del mensaje, fuera del cuerpo JSON, y es solo diagnóstico: ningún servicio decide nada en base a ese valor. La solución no es de código: durante una demo, un único Booking activo contra esa suscripción.
 
 Las reservas que vencen por el temporizador (`ExpiredReservationsBackgroundService`) se registran por cantidad, no una por una, y sin correlation id: Booking no lo guarda en la reserva. Es una limitación conocida.
 

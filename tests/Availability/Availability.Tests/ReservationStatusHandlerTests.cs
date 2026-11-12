@@ -1,6 +1,8 @@
 using Availability.Application.Abstractions;
+using Availability.Application.Logging;
 using Availability.Application.ReservationRequests;
 using Availability.Infrastructure.Persistence.Repositories;
+using Microsoft.Extensions.Logging;
 namespace Availability.Tests;
 [Collection(PostgreSqlCollection.Name)]
 public sealed class ReservationStatusHandlerTests(PostgreSqlFixture fixture)
@@ -61,6 +63,66 @@ public sealed class ReservationStatusHandlerTests(PostgreSqlFixture fixture)
         var exception = await Assert.ThrowsAsync<BookingUnavailableException>(
             () => handler.HandleAsync(requestId, "user-42"));
         Assert.Equal(requestId, exception.RequestId);
+    }
+    [Fact]
+    public async Task HandleAsync_BookingStillDoesNotKnowTheRequest_WarnsOnlyInsideTheWindowAfterTheThreshold()
+    {
+        var requestId = await SeedRequestAsync("user-42");
+        var logger = new RecordingLogger<ReservationStatusHandler>();
+        await using var context = fixture.CreateDbContext();
+        var requestedAt = (await new ReservationRequestRepository(context).GetByIdAsync(requestId))!.RequestedAt;
+        var booking = new StubBookingStatusClient(_ => null);
+
+        // The window is [15 s, 21 s): the first edge warns, the second does not. Before it and after it the
+        // handler stays quiet, so a poll every few seconds does not flood the log.
+        foreach (var elapsedSeconds in new[] { 5, 14, 15, 20, 21, 40 })
+        {
+            var handler = new ReservationStatusHandler(
+                new ReservationRequestRepository(context),
+                booking,
+                logger,
+                new FixedTimeProvider(requestedAt.AddSeconds(elapsedSeconds)));
+            Assert.Null(await handler.HandleAsync(requestId, "user-42"));
+        }
+
+        var warnings = logger.Entries.Where(entry => entry.Level == LogLevel.Warning).ToList();
+        Assert.Equal(2, warnings.Count);
+        Assert.All(warnings, warning =>
+        {
+            Assert.Equal(AvailabilityAuditEvents.ReservationRequestNotRegistered, warning.EventId);
+            Assert.Contains($"RequestId: {requestId}", warning.Message);
+            Assert.Contains($"CorrelationId: {requestId}", warning.Message);
+            Assert.Contains("Service: Availability", warning.Message);
+            Assert.DoesNotContain("user-42", warning.Message);
+        });
+        Assert.Contains("ElapsedSeconds: 15", warnings[0].Message);
+        Assert.Contains("ElapsedSeconds: 20", warnings[1].Message);
+    }
+    [Fact]
+    public async Task HandleAsync_BookingAnswersAfterTheThreshold_DoesNotWarn()
+    {
+        var requestId = await SeedRequestAsync("user-42");
+        var logger = new RecordingLogger<ReservationStatusHandler>();
+        await using var context = fixture.CreateDbContext();
+        var requestedAt = (await new ReservationRequestRepository(context).GetByIdAsync(requestId))!.RequestedAt;
+        var booking = new StubBookingStatusClient(id => new ReservationStatusResult
+        {
+            RequestId = id,
+            Status = ReservationStatus.Retained
+        });
+        var handler = new ReservationStatusHandler(
+            new ReservationRequestRepository(context),
+            booking,
+            logger,
+            new FixedTimeProvider(requestedAt.AddSeconds(16)));
+        var result = await handler.HandleAsync(requestId, "user-42");
+        Assert.NotNull(result);
+        Assert.Empty(logger.Entries);
+    }
+    // A clock that always says the same instant, to place a poll at an exact age of the request.
+    private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
     }
     // Stores a request through the existing handler, so the row is built exactly as in production.
     private async Task<Guid> SeedRequestAsync(string userId)
