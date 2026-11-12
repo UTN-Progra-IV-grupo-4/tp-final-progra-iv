@@ -48,7 +48,7 @@ La hora UTC la imprime el formateador de consola (`TimestampFormat` y `UseUtcTim
 | 1001 | `ReservationRequestStored` | Inicio de la cadena: la solicitud pasó la validación y se guardó | `Service`, `RequestId`, `CorrelationId`, `EventId`, `SeatId` |
 | 1002 | `ReservationRequestPublished` | El broker aceptó el mensaje (sin broker configurado lo emite `LoggingMessagePublisher` con otro texto) | `Service`, `MessageId`, `CorrelationId`, `PublisherHost` |
 | 1003 | `ReservationRequestPublishFailed` | El broker rechazó el mensaje y la solicitud guardada se eliminó (nivel Error) | `Service`, `RequestId`, `CorrelationId`, `ErrorCode=PublishFailed` |
-| 1004 | `ReservationRequestNotRegistered` | Booking sigue sin registrar la solicitud pasados 15 s: consulta de estado con Booking respondiendo "no existe" (nivel Warning, una vez por solicitud aproximadamente) | `Service`, `RequestId`, `CorrelationId`, `ElapsedSeconds` |
+| 1004 | `ReservationRequestNotRegistered` | Booking sigue sin registrar la solicitud pasados 15 s: consulta de estado con Booking respondiendo "no existe" (nivel Warning; se repite 2 o 3 veces por cada página de estado abierta, no en todas las consultas: probado) | `Service`, `RequestId`, `CorrelationId`, `ElapsedSeconds` |
 
 El estado consultado por el usuario no genera eventos de auditoría (se consulta cada pocos segundos), salvo el 1004. Cuando Booking no responde ya se registra un warning con el `RequestId`, que es el correlation id.
 

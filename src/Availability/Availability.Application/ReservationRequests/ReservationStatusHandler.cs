@@ -16,10 +16,11 @@ public class ReservationStatusHandler(
     // A confirmed reservation takes a few seconds; past this, Booking not knowing the request is a symptom.
     public static readonly TimeSpan NotRegisteredWarningAfter = TimeSpan.FromSeconds(15);
 
-    // The status page polls every few seconds. Warning only inside this window after the threshold keeps
-    // it to about once per request instead of once per poll. It assumes the polling interval is shorter than
-    // the window (3 s by default, ReservationStatusPolling:IntervalSeconds): with a longer interval a poll may
-    // miss the window and the warning would not appear. Each open page polling the same request warns once.
+    // The status page polls every few seconds. Warning only inside this window after the threshold keeps it
+    // to a couple of warnings per open page (the window holds two polls at the default 3 s) instead of one
+    // on every poll for the whole two minutes. It assumes the polling interval is shorter than the window
+    // (ReservationStatusPolling:IntervalSeconds): with a longer interval a poll may miss the window and the
+    // warning would not appear. Each open page polling the same request warns on its own.
     public static readonly TimeSpan NotRegisteredWarningWindow = TimeSpan.FromSeconds(6);
 
     private readonly ILogger<ReservationStatusHandler> _logger =
