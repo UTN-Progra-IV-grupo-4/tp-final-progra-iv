@@ -1,4 +1,5 @@
 using Azure.Messaging.ServiceBus;
+using Booking.Api.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Booking.Api.Messaging;
@@ -87,6 +88,8 @@ internal sealed class AzureServiceBusReservationRequestConsumer(
 
     private async Task ProcessMessageAsync(ProcessMessageEventArgs args)
     {
+        WarnIfPublishedFromAnotherHost(args.Message);
+
         var delivery = new ReservationRequestDelivery(
             args.Message.Body,
             args.Message.MessageId,
@@ -99,6 +102,26 @@ internal sealed class AzureServiceBusReservationRequestConsumer(
             delivery,
             settlement,
             args.CancellationToken);
+    }
+
+    // Diagnostic only. It never changes how the message is processed, and it is in the broker adapter
+    // on purpose: it is about how the message arrived, not about the reservation.
+    private void WarnIfPublishedFromAnotherHost(ServiceBusReceivedMessage message)
+    {
+        var publisherHost = ReservationMessageOrigin.ReadPublisherHost(message.ApplicationProperties);
+        if (!ReservationMessageOrigin.IsPublishedFromAnotherHost(publisherHost, Environment.MachineName))
+        {
+            return;
+        }
+
+        logger.LogWarning(
+            BookingAuditEvents.ReservationMessageFromOtherHost,
+            "Reservation message was published from another host: a consumer of the same subscription running elsewhere may be competing for the messages. Service: {Service}; MessageId: {MessageId}; PublisherHost: {PublisherHost}; ConsumerHost: {ConsumerHost}; Subscription: {SubscriptionName}.",
+            BookingAuditEvents.ServiceName,
+            message.MessageId,
+            publisherHost,
+            Environment.MachineName,
+            options.AzureServiceBus.SubscriptionName);
     }
 
     private Task ProcessErrorAsync(ProcessErrorEventArgs args)

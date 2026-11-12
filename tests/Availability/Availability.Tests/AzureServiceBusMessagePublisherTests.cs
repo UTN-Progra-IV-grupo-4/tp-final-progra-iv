@@ -106,4 +106,22 @@ public class AzureServiceBusMessagePublisherTests
         Assert.DoesNotContain("user-42", entry.Message);
         Assert.DoesNotContain(message.SeatId.ToString(), entry.Message);
     }
+
+    [Fact]
+    public async Task PublishAsync_TagsTheMessageWithThePublisherHostOutsideTheBody()
+    {
+        var sender = new CapturingSender();
+        var logger = new RecordingLogger<AzureServiceBusMessagePublisher>();
+        var publisher = new AzureServiceBusMessagePublisher(
+            new CapturingClient(sender), "reservation-requests", logger);
+
+        await publisher.PublishAsync(CreateMessage("correlation-1"));
+
+        var sent = Assert.Single(sender.Sent);
+        Assert.Equal(Environment.MachineName, sent.ApplicationProperties[BrokerMessageProperties.PublisherHost]);
+        Assert.Contains($"PublisherHost: {Environment.MachineName}", Assert.Single(logger.Entries).Message);
+        // The host is metadata: the JSON body stays exactly the contract.
+        using var document = JsonDocument.Parse(sent.Body.ToMemory());
+        Assert.False(document.RootElement.TryGetProperty("publisherHost", out _));
+    }
 }

@@ -52,15 +52,19 @@ public sealed class AzureServiceBusMessagePublisher : IMessagePublisher
             serviceBusMessage.CorrelationId = Guid.NewGuid().ToString();
         }
 
+        // Diagnostic only: lets a consumer tell that the message came from another machine.
+        serviceBusMessage.ApplicationProperties[BrokerMessageProperties.PublisherHost] = Environment.MachineName;
+
         await _sender.SendMessageAsync(serviceBusMessage, cancellationToken);
 
         // The body is never logged. CorrelationId is what Booking and Payment log for the same request.
         _logger.LogInformation(
             AvailabilityAuditEvents.ReservationRequestPublished,
-            "Azure Service Bus message published to topic {TopicName}. Service: {Service}; MessageId: {MessageId}; CorrelationId: {CorrelationId}.",
+            "Azure Service Bus message published to topic {TopicName}. Service: {Service}; MessageId: {MessageId}; CorrelationId: {CorrelationId}; PublisherHost: {PublisherHost}.",
             _topicName,
             AvailabilityAuditEvents.ServiceName,
             serviceBusMessage.MessageId,
-            serviceBusMessage.CorrelationId);
+            serviceBusMessage.CorrelationId,
+            Environment.MachineName);
     }
 }

@@ -24,6 +24,10 @@ internal static class BookingAuditEvents
     // Processing or settlement failed; the broker will redeliver the message.
     public static readonly EventId ReservationMessageFailed = new(2006, nameof(ReservationMessageFailed));
 
+    // Broker: this consumer received a message published from another host (Warning). Several consumers of
+    // the same subscription compete for the messages, so another developer's Booking can take this one's.
+    public static readonly EventId ReservationMessageFromOtherHost = new(2007, nameof(ReservationMessageFromOtherHost));
+
     // Payment: a charge attempt was sent to Payment.
     public static readonly EventId PaymentChargeRequested = new(2010, nameof(PaymentChargeRequested));
 
